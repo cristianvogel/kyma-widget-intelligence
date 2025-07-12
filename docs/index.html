@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Widget Intelligence - Documentation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'mono': ['Fira Code', 'Monaco', 'Consolas', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for dark theme */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+        
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        /* Code highlighting */
+        .highlight {
+            background: linear-gradient(90deg, #1e40af 0%, #3b82f6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans leading-relaxed">
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 right-0 bg-gray-800/90 backdrop-blur-sm border-b border-gray-700 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-2xl font-bold highlight">Widget Intelligence</h1>
+                    </div>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="#introduction" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">Introduction</a>
+                        <a href="#installation" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">Installation</a>
+                        <a href="#examples" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">Examples</a>
+                        <a href="#tauri" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">Tauri</a>
+                        <a href="#api" class="text-gray-300 hover:bg-gray-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">API</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="pt-16">
+        <div class="relative bg-gradient-to-br from-gray-900 via-blue-900/20 to-gray-900 py-24">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center">
+                    <h1 class="text-5xl md:text-7xl font-bold text-white mb-6">
+                        Widget <span class="highlight">Intelligence</span>
+                    </h1>
+                    <p class="text-xl md:text-2xl text-gray-300 mb-8 max-w-3xl mx-auto">
+                        A powerful Rust library for intelligent widget suggestion and learning based on user behavior patterns
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                        <a href="#installation" class="inline-flex items-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors">
+                            Get Started
+                        </a>
+                        <a href="https://github.com/cristianvogel/widget_intelligence" class="inline-flex items-center px-8 py-3 border border-gray-300 text-base font-medium rounded-md text-gray-300 bg-transparent hover:bg-gray-800 transition-colors">
+                            View on GitHub
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Grid -->
+    <div class="py-16 bg-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold text-white mb-4">Key Features</h2>
+                <p class="text-gray-300 text-lg">Everything you need for intelligent widget management</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div class="bg-gray-900 rounded-lg p-6 border border-gray-700">
+                    <div class="text-blue-400 text-2xl mb-4">🧠</div>
+                    <h3 class="text-xl font-semibold text-white mb-2">Smart Suggestions</h3>
+                    <p class="text-gray-300">Learn from user behavior to suggest widget values with confidence scoring</p>
+                </div>
+                <div class="bg-gray-900 rounded-lg p-6 border border-gray-700">
+                    <div class="text-green-400 text-2xl mb-4">💾</div>
+                    <h3 class="text-xl font-semibold text-white mb-2">Persistent Storage</h3>
+                    <p class="text-gray-300">Sled-based database for long-term learning and data persistence</p>
+                </div>
+                <div class="bg-gray-900 rounded-lg p-6 border border-gray-700">
+                    <div class="text-purple-400 text-2xl mb-4">🔗</div>
+                    <h3 class="text-xl font-semibold text-white mb-2">Kyma Integration</h3>
+                    <p class="text-gray-300">Extract and process widget data from Kyma JSON format</p>
+                </div>
+                <div class="bg-gray-900 rounded-lg p-6 border border-gray-700">
+                    <div class="text-yellow-400 text-2xl mb-4">⚡</div>
+                    <h3 class="text-xl font-semibold text-white mb-2">Zero Dependencies</h3>
+                    <p class="text-gray-300">Pure Rust library without UI framework dependencies</p>
+                </div>
+                <div class="bg-gray-900 rounded-lg p-6 border border-gray-700">
+                    <div class="text-red-400 text-2xl mb-4">🚀</div>
+                    <h3 class="text-xl font-semibold text-white mb-2">Tauri Ready</h3>
+                    <p class="text-gray-300">Complete examples and integrations for Tauri applications</p>
+                </div>
+                <div class="bg-gray-900 rounded-lg p-6 border border-gray-700">
+                    <div class="text-cyan-400 text-2xl mb-4">📊</div>
+                    <h3 class="text-xl font-semibold text-white mb-2">Advanced Analytics</h3>
+                    <p class="text-gray-300">Similarity algorithms based on multiple widget features</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <!-- Sidebar -->
+            <div class="lg:col-span-1">
+                <div class="sticky top-20">
+                    <nav class="space-y-1">
+                        <a href="#introduction" class="text-gray-300 hover:text-white block px-3 py-2 rounded-md text-sm font-medium">Introduction</a>
+                        <a href="#installation" class="text-gray-300 hover:text-white block px-3 py-2 rounded-md text-sm font-medium">Installation</a>
+                        <a href="#quick-start" class="text-gray-300 hover:text-white block px-3 py-2 rounded-md text-sm font-medium">Quick Start</a>
+                        <a href="#examples" class="text-gray-300 hover:text-white block px-3 py-2 rounded-md text-sm font-medium">Examples</a>
+                        <a href="#tauri" class="text-gray-300 hover:text-white block px-3 py-2 rounded-md text-sm font-medium">Tauri Integration</a>
+                        <a href="#svelte" class="text-gray-300 hover:text-white block px-3 py-2 rounded-md text-sm font-medium">Svelte 5</a>
+                        <a href="#api" class="text-gray-300 hover:text-white block px-3 py-2 rounded-md text-sm font-medium">API Reference</a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Content -->
+            <div class="lg:col-span-3 space-y-12">
+                <!-- Introduction -->
+                <section id="introduction" class="scroll-mt-20">
+                    <h2 class="text-3xl font-bold text-white mb-6">Introduction</h2>
+                    <div class="prose prose-invert max-w-none">
+                        <p class="text-gray-300 text-lg mb-6">
+                            Widget Intelligence is a sophisticated Rust library designed to learn from user interactions 
+                            and provide intelligent suggestions for widget values. It uses advanced similarity algorithms 
+                            to understand patterns in user behavior and make contextual recommendations.
+                        </p>
+                        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
+                            <h3 class="text-xl font-semibold text-white mb-4">Use Cases</h3>
+                            <ul class="space-y-2 text-gray-300">
+                                <li>• Audio production software with intelligent parameter suggestions</li>
+                                <li>• UI frameworks that adapt to user preferences</li>
+                                <li>• Creative tools that learn from user workflows</li>
+                                <li>• Configuration systems with smart defaults</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Installation -->
+                <section id="installation" class="scroll-mt-20">
+                    <h2 class="text-3xl font-bold text-white mb-6">Installation</h2>
+                    <div class="space-y-6">
+                        <p class="text-gray-300">Add this to your <code class="bg-gray-800 px-2 py-1 rounded text-blue-400">Cargo.toml</code>:</p>
+                        <div class="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                            <div class="bg-gray-800 px-4 py-2 border-b border-gray-700">
+                                <span class="text-sm text-gray-400">Cargo.toml</span>
+                            </div>
+                            <pre class="p-4 text-sm"><code class="text-gray-100">[dependencies]
+widget_intelligence = "0.1"</code></pre>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Quick Start -->
+                <section id="quick-start" class="scroll-mt-20">
+                    <h2 class="text-3xl font-bold text-white mb-6">Quick Start</h2>
+                    <div class="space-y-6">
+                        <p class="text-gray-300">Here's a simple example to get you started:</p>
+                        <div class="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                            <div class="bg-gray-800 px-4 py-2 border-b border-gray-700">
+                                <span class="text-sm text-gray-400">main.rs</span>
+                            </div>
+                            <pre class="p-4 text-sm overflow-x-auto"><code class="text-gray-100">use widget_intelligence::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create a new suggestion engine
+    let mut engine = WidgetSuggestionEngine::new();
+
+    // Define a widget
+    let widget = Widget {
+        label: Some("Master Volume".to_string()),
+        minimum: Some(0.0),
+        maximum: Some(127.0),
+        current_value: Some(95.0),
+        is_generated: Some(false),
+        display_type: Some("slider".to_string()),
+    };
+
+    // Store the widget to learn from it
+    engine.store_widget(widget);
+
+    // Get suggestions for similar widgets
+    let partial_widget = Widget {
+        label: Some("Volume".to_string()),
+        ..Default::default()
+    };
+
+    let suggestions = engine.get_suggestions(&partial_widget, 5);
+    for suggestion in suggestions {
+        println!("Suggested value: {:?} (confidence: {:.2})", 
+                 suggestion.suggested_value, suggestion.confidence);
+    }
+
+    Ok(())
+}</code></pre>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Examples -->
+                <section id="examples" class="scroll-mt-20">
+                    <h2 class="text-3xl font-bold text-white mb-6">Examples</h2>
+                    <div class="space-y-8">
+                        <!-- Persistent Storage Example -->
+                        <div>
+                            <h3 class="text-xl font-semibold text-white mb-4">Persistent Storage</h3>
+                            <div class="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                                <div class="bg-gray-800 px-4 py-2 border-b border-gray-700">
+                                    <span class="text-sm text-gray-400">persistent_example.rs</span>
+                                </div>
+                                <pre class="p-4 text-sm overflow-x-auto"><code class="text-gray-100">use widget_intelligence::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize with persistent storage
+    let mut system = init_intelligence_system("./widget_data.db")?;
+
+    // Store widgets - they'll be persisted automatically
+    system.store_widget(create_test_widget("Bass Level", 0.0, 100.0, 75.0))?;
+
+    // Create and store presets
+    let preset = Preset {
+        name: "My Audio Setup".to_string(),
+        description: Some("Perfect for podcasts".to_string()),
+        widget_values: vec![
+            WidgetValue {
+                widget_id: "1".to_string(),
+                label: Some("Bass Level".to_string()),
+                value: 75.0,
+                confidence: 1.0,
+            }
+        ],
+        created_by: Some("user123".to_string()),
+        usage_count: 1,
+        last_used: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    };
+
+    system.store_preset(preset)?;
+
+    // Get statistics
+    let stats = system.get_stats();
+    println!("Total widgets: {}", stats.get("total_widgets").unwrap_or(&0));
+
+    Ok(())
+}</code></pre>
+                            </div>
+                        </div>
+
+                        <!-- Standalone Service Example -->
+                        <div>
+                            <h3 class="text-xl font-semibold text-white mb-4">Standalone Service</h3>
+                            <p class="text-gray-300 mb-4">For non-Tauri applications, use the standalone service:</p>
+                            <div class="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                                <div class="bg-gray-800 px-4 py-2 border-b border-gray-700">
+                                    <span class="text-sm text-gray-400">standalone_example.rs</span>
+                                </div>
+                                <pre class="p-4 text-sm overflow-x-auto"><code class="text-gray-100">#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize the service
+    let service = StandaloneIntelligenceService::new("./intelligence.db")?;
+    
+    // Cache widget description
+    let kyma_json = r#"{"concreteEventID": 100, "label": "Volume", "minimum": 0.0, "maximum": 100.0}"#;
+    service.cache_widget_description(100, kyma_json.to_string()).await?;
+    
+    // Save preset and learn
+    let mut widget_values = std::collections::HashMap::new();
+    widget_values.insert("100".to_string(), 75.0);
+    
+    let preset_data = PresetData {
+        name: "My Setup".to_string(),
+        description: Some("Great for mixing".to_string()),
+        widget_values,
+        created_by: Some("user123".to_string()),
+    };
+    
+    let stats = service.save_preset_and_learn(preset_data).await?;
+    println!("Learned from preset. Total widgets: {}", stats.total_widgets);
+    
+    Ok(())
+}</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tauri Integration -->
+                <section id="tauri" class="scroll-mt-20">
+                    <h2 class="text-3xl font-bold text-white mb-6">Tauri Integration</h2>
+                    <div class="space-y-6">
+                        <p class="text-gray-300">Complete integration with Tauri 2 applications:</p>
+                        
+                        <!-- Rust Backend -->
+                        <div>
+                            <h3 class="text-xl font-semibold text-white mb-4">Rust Backend (main.rs)</h3>
+                            <div class="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                                <div class="bg-gray-800 px-4 py-2 border-b border-gray-700">
+                                    <span class="text-sm text-gray-400">src-tauri/src/main.rs</span>
+                                </div>
+                                <pre class="p-4 text-sm overflow-x-auto"><code class="text-gray-100">use widget_intelligence::*;
+use std::sync::Mutex;
+
+pub struct AppState {
+    pub intelligence: Mutex<PersistentWidgetSuggestionEngine>,
+    pub extractor: Mutex<KymaWidgetExtractor>,
+}
+
+#[tauri::command]
+async fn get_widget_suggestions(
+    state: tauri::State<'_, AppState>,
+    event_id: i64,
+    partial_label: Option<String>,
+    display_type: Option<String>,
+) -> Result<Vec<SuggestionResponse>, String> {
+    let intelligence = state.intelligence.lock()
+        .map_err(|_| "Failed to lock intelligence system")?;
+    
+    let partial_widget = Widget {
+        label: partial_label,
+        minimum: None,
+        maximum: None,
+        current_value: None,
+        is_generated: None,
+        display_type,
+    };
+    
+    let suggestions = intelligence.get_suggestions(&partial_widget, 5);
+    
+    let responses: Vec<SuggestionResponse> = suggestions
+        .into_iter()
+        .map(|suggestion| SuggestionResponse {
+            suggested_value: suggestion.suggested_value,
+            confidence: suggestion.confidence,
+            alternative_values: suggestion.alternative_values,
+            reason: suggestion.reason,
+        })
+        .collect();
+    
+    Ok(responses)
+}
+
+fn main() {
+    let app_data_dir = tauri::api::path::app_data_dir(&tauri::Config::default())
+        .expect("Failed to get app data directory");
+    
+    let db_path = app_data_dir.join("widget_intelligence.db");
+    let app_state = AppState::new(db_path.to_str().unwrap())
+        .expect("Failed to initialize app state");
+    
+    tauri::Builder::default()
+        .manage(app_state)
+        .invoke_handler(tauri::generate_handler![
+            get_widget_suggestions,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Svelte 5 Integration -->
+                <section id="svelte" class="scroll-mt-20">
+                    <h2 class="text-3xl font-bold text-white mb-6">Svelte 5 Integration</h2>
+                    <div class="space-y-6">
+                        <p class="text-gray-300">Frontend integration using Svelte 5 with runes:</p>
+                        
+                        <!-- TypeScript Service -->
+                        <div>
+                            <h3 class="text-xl font-semibold text-white mb-4">Intelligence Service</h3>
+                            <div class="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                                <div class="bg-gray-800 px-4 py-2 border-b border-gray-700">
+                                    <span class="text-sm text-gray-400">src/lib/services/intelligence.ts</span>
+                                </div>
+                                <pre class="p-4 text-sm overflow-x-auto"><code class="text-gray-100">import { invoke } from '@tauri-apps/api/core';
+
+export interface SuggestionResponse {
+  suggested_value: number | null;
+  confidence: number;
+  alternative_values: number[];
+  reason: string;
+}
+
+export interface PresetData {
+  name: string;
+  description?: string;
+  widget_values: Record<string, number>;
+  created_by?: string;
+}
+
+export class IntelligenceService {
+  async getWidgetSuggestions(
+    eventId: number,
+    partialLabel?: string,
+    displayType?: string,
+  ): Promise<SuggestionResponse[]> {
+    return await invoke('get_widget_suggestions', {
+      eventId,
+      partialLabel,
+      displayType,
+    });
+  }
+
+  async savePresetAndLearn(presetData: PresetData): Promise<void> {
+    await invoke('save_preset_and_learn', { presetData });
+  }
+}
+
+export const intelligenceService = new IntelligenceService();</code></pre>
+                            </div>
+                        </div>
+
+                        <!-- Smart Widget Component -->
+                        <div>
+                            <h3 class="text-xl font-semibold text-white mb-4">Smart Widget Component</h3>
+                            <div class="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                                <div class="bg-gray-800 px-4 py-2 border-b border-gray-700">
+                                    <span class="text-sm text-gray-400">src/lib/components/SmartWidget.svelte</span>
+                                </div>
+                                <pre class="p-4 text-sm overflow-x-auto"><code class="text-gray-100">&lt;script lang="ts"&gt;
+  import { intelligenceService, type SuggestionResponse } from '$lib/services/intelligence';
+  
+  interface Props {
+    eventId: number;
+    label: string;
+    value: number;
+    min: number;
+    max: number;
+    displayType?: 'slider' | 'knob' | 'button';
+    onValueChange: (value: number) => void;
+  }
+  
+  let {
+    eventId,
+    label,
+    value = $bindable(),
+    min,
+    max,
+    displayType = 'slider',
+    onValueChange
+  }: Props = $props();
+  
+  let suggestions = $state<SuggestionResponse[]>([]);
+  let showSuggestions = $state(false);
+  let loading = $state(false);
+  
+  async function loadSuggestions() {
+    if (!label.trim()) return;
+    
+    loading = true;
+    try {
+      suggestions = await intelligenceService.getWidgetSuggestions(
+        eventId,
+        label,
+        displayType
+      );
+    } catch (error) {
+      console.error('Failed to load suggestions:', error);
+    } finally {
+      loading = false;
+    }
+  }
+  
+  function applySuggestion(suggestion: SuggestionResponse) {
+    if (suggestion.suggested_value !== null) {
+      value = suggestion.suggested_value;
+      onValueChange(suggestion.suggested_value);
+      showSuggestions = false;
+    }
+  }
+  
+  function getConfidenceColor(confidence: number): string {
+    if (confidence > 0.8) return 'text-green-400';
+    if (confidence > 0.6) return 'text-blue-400';
+    if (confidence > 0.4) return 'text-yellow-400';
+    return 'text-gray-400';
+  }
+  
+  // Load suggestions when label changes
+  $effect(() => {
+    loadSuggestions();
+  });
+&lt;/script&gt;
+
+&lt;div class="smart-widget bg-gray-800 rounded-lg p-4 border border-gray-700"&gt;
+  &lt;!-- Widget Header --&gt;
+  &lt;div class="flex items-center justify-between mb-3"&gt;
+    &lt;label class="text-sm font-medium text-gray-300"&gt;
+      {label}
+    &lt;/label&gt;
+    
+    {#if suggestions.length > 0}
+      &lt;button
+        onclick={() => showSuggestions = !showSuggestions}
+        class="inline-flex items-center px-3 py-1 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+        disabled={loading}
+      &gt;
+        {loading ? '⏳' : '💡'} {suggestions.length} suggestions
+      &lt;/button&gt;
+    {/if}
+  &lt;/div&gt;
+
+  &lt;!-- Widget Control --&gt;
+  {#if displayType === 'slider'}
+    &lt;div class="flex items-center space-x-3 mb-3"&gt;
+      &lt;input
+        type="range"
+        {min}
+        {max}
+        step="0.1"
+        bind:value
+        onchange={() => onValueChange(value)}
+        class="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+      /&gt;
+      &lt;span class="min-w-[60px] text-sm font-mono text-gray-400"&gt;
+        {value.toFixed(1)}
+      &lt;/span&gt;
+    &lt;/div&gt;
+  {/if}
+
+  &lt;!-- Suggestions Panel --&gt;
+  {#if showSuggestions}
+    &lt;div class="mt-3 p-3 bg-gray-900 rounded-md border border-gray-600"&gt;
+      &lt;div class="flex items-center justify-between mb-2"&gt;
+        &lt;h4 class="text-sm font-medium text-gray-300"&gt;Smart Suggestions&lt;/h4&gt;
+        &lt;button
+          onclick={() => showSuggestions = false}
+          class="text-gray-500 hover:text-gray-300"
+        &gt;
+          ✕
+        &lt;/button&gt;
+      &lt;/div&gt;
+
+      &lt;div class="space-y-2"&gt;
+        {#each suggestions.slice(0, 3) as suggestion, index}
+          &lt;div class="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700 hover:bg-gray-700 transition-colors"&gt;
+            &lt;div class="flex-1"&gt;
+              &lt;div class="flex items-center space-x-2"&gt;
+                &lt;span class="text-sm font-medium text-white"&gt;
+                  {suggestion.suggested_value?.toFixed(1) || 'N/A'}
+                &lt;/span&gt;
+                &lt;span class={`text-xs ${getConfidenceColor(suggestion.confidence)}`}&gt;
+                  {(suggestion.confidence * 100).toFixed(0)}%
+                &lt;/span&gt;
+              &lt;/div&gt;
+              &lt;p class="text-xs text-gray-400 mt-1"&gt;
+                {suggestion.reason}
+              &lt;/p&gt;
+            &lt;/div&gt;
+            
+            &lt;button
+              onclick={() => applySuggestion(suggestion)}
+              disabled={suggestion.suggested_value === null}
+              class="ml-2 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+            &gt;
+              Apply
+            &lt;/button&gt;
+          &lt;/div&gt;
+        {/each}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  {/if}
+&lt;/div&gt;</code></pre>
+                            </div>
+                        </div>
+
+                        <!-- Usage Example -->
+                        <div>
+                            <h3 class="text-xl font-semibold text-white mb-4">Usage in App</h3>
+                            <div class="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                                <div class="bg-gray-800 px-4 py-2 border-b border-gray-700">
+                                    <span class="text-sm text-gray-400">src/routes/+page.svelte</span>
+                                </div>
+                                <pre class="p-4 text-sm overflow-x-auto"><code class="text-gray-100">&lt;script lang="ts"&gt;
+  import SmartWidget from '$lib/components/SmartWidget.svelte';
+  
+  let masterVolume = $state(95.0);
+  let bassLevel = $state(75.0);
+  let trebleLevel = $state(80.0);
+  
+  function handleVolumeChange(value: number) {
+    masterVolume = value;
+    console.log('Master volume changed to:', value);
+  }
+  
+  function handleBassChange(value: number) {
+    bassLevel = value;
+    console.log('Bass level changed to:', value);
+  }
+  
+  function handleTrebleChange(value: number) {
+    trebleLevel = value;
+    console.log('Treble level changed to:', value);
+  }
+&lt;/script&gt;
+
+&lt;div class="max-w-4xl mx-auto p-6 space-y-6"&gt;
+  &lt;h1 class="text-3xl font-bold text-white mb-8"&gt;Audio Mixer&lt;/h1&gt;
+  
+  &lt;div class="grid grid-cols-1 md:grid-cols-3 gap-6"&gt;
+    &lt;SmartWidget
+      eventId={100}
+      label="Master Volume"
+      bind:value={masterVolume}
+      min={0}
+      max={127}
+      displayType="slider"
+      onValueChange={handleVolumeChange}
+    /&gt;
+    
+    &lt;SmartWidget
+      eventId={101}
+      label="Bass Level"
+      bind:value={bassLevel}
+      min={0}
+      max={100}
+      displayType="slider"
+      onValueChange={handleBassChange}
+    /&gt;
+    
+    &lt;SmartWidget
+      eventId={102}
+      label="Treble Level"
+      bind:value={trebleLevel}
+      min={0}
+      max={100}
+      displayType="slider"
+      onValueChange={handleTrebleChange}
+    /&gt;
+  &lt;/div&gt;
+  
+  &lt;div class="mt-8 p-4 bg-gray-800 rounded-lg border border-gray-700"&gt;
+    &lt;h2 class="text-xl font-semibold text-white mb-4"&gt;Current Values&lt;/h2&gt;
+    &lt;div class="grid grid-cols-3 gap-4 text-sm"&gt;
+      &lt;div&gt;
+        &lt;span class="text-gray-400"&gt;Master Volume:&lt;/span&gt;
+        &lt;span class="text-white font-mono ml-2"&gt;{masterVolume.toFixed(1)}&lt;/span&gt;
+      &lt;/div&gt;
+      &lt;div&gt;
+        &lt;span class="text-gray-400"&gt;Bass Level:&lt;/span&gt;
+        &lt;span class="text-white font-mono ml-2"&gt;{bassLevel.toFixed(1)}&lt;/span&gt;
+      &lt;/div&gt;
+      &lt;div&gt;
+        &lt;span class="text-gray-400"&gt;Treble Level:&lt;/span&gt;
+        &lt;span class="text-white font-mono ml-2"&gt;{trebleLevel.toFixed(1)}&lt;/span&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- API Reference -->
+                <section id="api" class="scroll-mt-20">
+                    <h2 class="text-3xl font-bold text-white mb-6">API Reference</h2>
+                    <div class="space-y-8">
+                        <!-- Core Types -->
+                        <div>
+                            <h3 class="text-xl font-semibold text-white mb-4">Core Types</h3>
+                            <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                                <ul class="space-y-3 text-gray-300">
+                                    <li><code class="text-blue-400">Widget</code> - Represents a UI widget with label, range, and current value</li>
+                                    <li><code class="text-blue-400">Preset</code> - Collection of widget values with metadata</li>
+                                    <li><code class="text-blue-400">Suggestion</code> - AI-generated suggestion with confidence score</li>
+                                    <li><code class="text-blue-400">WidgetRecord</code> - Internal storage format for learned widgets</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Main Classes -->
+                        <div>
+                            <h3 class="text-xl font-semibold text-white mb-4">Main Classes</h3>
+                            <div class="space-y-4">
+                                <div class="bg-gray-900 rounded-lg p-4 border border-gray-700">
+                                    <h4 class="text-lg font-medium text-white mb-2">WidgetSuggestionEngine</h4>
+                                    <p class="text-gray-300 text-sm mb-3">Core suggestion algorithm</p>
+                                    <div class="bg-gray-800 rounded p-3">
+                                        <code class="text-sm text-gray-100">
+                                            let mut engine = WidgetSuggestionEngine::new();<br>
+                                            engine.store_widget(widget);<br>
+                                            let suggestions = engine.get_suggestions(&partial_widget, 5);
+                                        </code>
+                                    </div>
+                                </div>
+
+                                <div class="bg-gray-900 rounded-lg p-4 border border-gray-700">
+                                    <h4 class="text-lg font-medium text-white mb-2">PersistentWidgetSuggestionEngine</h4>
+                                    <p class="text-gray-300 text-sm mb-3">Engine with database persistence</p>
+                                    <div class="bg-gray-800 rounded p-3">
+                                        <code class="text-sm text-gray-100">
+                                            let mut system = init_intelligence_system("./data.db")?;<br>
+                                            system.store_widget(widget)?;<br>
+                                            system.flush()?;
+                                        </code>
+                                    </div>
+                                </div>
+
+                                <div class="bg-gray-900 rounded-lg p-4 border border-gray-700">
+                                    <h4 class="text-lg font-medium text-white mb-2">StandaloneIntelligenceService</h4>
+                                    <p class="text-gray-300 text-sm mb-3">High-level async service interface</p>
+                                    <div class="bg-gray-800 rounded p-3">
+                                        <code class="text-sm text-gray-100">
+                                            let service = StandaloneIntelligenceService::new("./db")?;<br>
+                                            service.save_preset_and_learn(preset_data).await?;<br>
+                                            let suggestions = service.get_widget_value_suggestions(...).await?;
+                                        </code>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 border-t border-gray-700 py-12 mt-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                    <h3 class="text-lg font-semibold text-white mb-4">Widget Intelligence</h3>
+                    <p class="text-gray-300 text-sm">
+                        Intelligent widget suggestion and learning for Rust applications.
+                    </p>
+                </div>
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Resources</h4>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-gray-400 hover:text-white text-sm transition-colors">Documentation</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white text-sm transition-colors">Examples</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white text-sm transition-colors">API Reference</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Community</h4>
+                    <ul class="space-y-2">
+                        <li><a href="https://github.com/cristianvogel/widget_intelligence" class="text-gray-400 hover:text-white text-sm transition-colors">GitHub</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white text-sm transition-colors">Issues</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white text-sm transition-colors">Discussions</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="mt-8 pt-8 border-t border-gray-700">
+                <p class="text-center text-gray-400 text-sm">
+                    © 2024 Widget Intelligence. Licensed under MIT OR Apache-2.0.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Highlight current section in navigation
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.getAttribute('id');
+                    document.querySelectorAll(`a[href="#${id}"]`).forEach(link => {
+                        link.classList.add('text-blue-400');
+                        link.classList.remove('text-gray-300');
+                    });
+                } else {
+                    const id = entry.target.getAttribute('id');
+                    document.querySelectorAll(`a[href="#${id}"]`).forEach(link => {
+                        link.classList.remove('text-blue-400');
+                        link.classList.add('text-gray-300');
+                    });
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('section[id]').forEach(section => {
+            observer.observe(section);
+        });
+    </script>
+</body>
+</html>

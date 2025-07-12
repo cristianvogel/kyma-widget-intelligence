@@ -1,0 +1,23 @@
+[package]
+name = "widget_intelligence"
+version = "0.1.0"
+edition = "2021"
+description = "A Rust library for intelligent widget suggestion and learning"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/cristianvogel/widget_intelligence"
+keywords = ["widgets", "machine-learning", "suggestions", "ui", "library"]
+categories = ["algorithms", "data-structures"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+strsim = "0.10"
+sled = "0.34"
+bincode = "1.3"
+tokio = { version = "1", features = ["full"] }
+log = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+once_cell = "1.19"
+
+[dev-dependencies]
+tempfile = "3.8"
