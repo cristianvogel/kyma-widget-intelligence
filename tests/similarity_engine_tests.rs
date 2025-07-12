@@ -93,7 +93,7 @@ fn test_kyma_style_widgets() {
 
     for suggestion in &suggestions {
         println!(
-            "  • {} (confidence: {:.2})",
+            "  • {} (confidence: {:.4})",
             suggestion
                 .widget
                 .label
@@ -118,9 +118,11 @@ fn test_realistic_presets() {
 
     // Store some widgets first
     engine.store_widget(create_kyma_widget("Amp_01", 0.0, 1.0, 0.8));
-    engine.store_widget(create_kyma_widget("cutoff", -24.0, 24.0, 12.0));
+    engine.store_widget(create_kyma_widget("cutoff", 0.0, 3_500.0, 630.0));
     engine.store_widget(create_kyma_widget("Gate", 0.0, 1.0, 0.7));
     engine.store_widget(create_kyma_widget("rate", 0.0, 1.0, 0.4));
+    engine.store_widget(create_kyma_widget("index", 0.0, 1.0, 0.22));
+    engine.store_widget(create_kyma_widget("index", 0.0, 1.0, 0.82));
 
     // Create realistic presets
     let presets = vec![
@@ -207,14 +209,14 @@ fn test_value_ranges() {
 
     // Test different common ranges
     let range_tests = vec![
-        ("sw_00", -1.0, 1.0, 0.2),
-        ("sw_01", 0.0, 1.0, 0.8),
-        ("cutoff", -24.0, 24.0, 5.5),
-        ("rate", 30.0, 90.0, 65.0),
-        ("morph", -1.0, 1.0, -0.3),
-        ("Gate", 0.0, 1.0, 0.9),
+        ("sw_00",   0.0, 1.0, 1.0),
+        ("sw_01", 0.0, 1.0, 0.0),
+        ("cutoff", 0.0, 8_000.0 , 650.0),
+        ("rate", -1.0, 1.0, 0.666),
+        ("morph", 0.0, 1.0, 0.3),
+        ("Gate", 0.0, 1.0, 1.0),
         ("Amp_01", 0.0, 1.0, 0.7),
-        ("Amp_02", -1.0, 1.0, 0.4),
+        ("Amp_02", -1.0, 1.0, -0.4),
     ];
 
     print_separator();
@@ -237,9 +239,9 @@ fn test_value_ranges() {
         );
     }
 
-    // Test similarity within same ranges
+    // Test similarity within the same ranges
     let test_widget = Widget {
-        label: Some("sw_02".to_string()),
+        label: Some("index".to_string()),
         minimum: Some(0.0),
         maximum: Some(1.0),
         ..Default::default()
@@ -249,12 +251,12 @@ fn test_value_ranges() {
     println!(
         "\n{} {}",
         "→".green(),
-        format!("Suggestions for 'sw_02' [0.0, 1.0]:",).yellow()
+        format!("Suggestions for {}", test_widget.label.as_deref().unwrap_or("Unknown")).cyan()
     );
 
     for suggestion in &suggestions {
         println!(
-            "  • {} (confidence: {:.2})",
+            "  • {} (confidence: {:.4})",
             suggestion
                 .widget
                 .label
@@ -314,7 +316,7 @@ fn test_morph_variants() {
 
     for suggestion in &suggestions {
         println!(
-            "  • {} (confidence: {:.2})",
+            "  • {} (confidence: {:.4})",
             suggestion
                 .widget
                 .label
@@ -377,7 +379,7 @@ fn test_amp_series() {
 
     for suggestion in &suggestions {
         println!(
-            "  • {} (confidence: {:.2})",
+            "  • {} (confidence: {:.4})",
             suggestion
                 .widget
                 .label
