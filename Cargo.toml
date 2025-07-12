@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/cristianvogel/kyma-widget_intelligence"
 keywords = ["widgets", "machine-learning", "suggestions",  "library", "kyma"]
 categories = ["algorithms", "data-structures"]
+readme ="README.md"
 
 [dependencies]
 # Serde kept temporarily for Tauri JSON handling
