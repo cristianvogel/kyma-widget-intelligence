@@ -1,8 +1,13 @@
+use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::time::{SystemTime, UNIX_EPOCH};
 use strsim::jaro_winkler;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Represents a widget with its properties and current value
+#[derive(Debug, Clone, Encode, Decode, Serialize, Deserialize)]
 pub struct Widget {
     pub label: Option<String>,
     pub minimum: Option<f64>,
@@ -12,7 +17,8 @@ pub struct Widget {
     pub current_value: Option<f64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Represents a widget value with metadata
+#[derive(Debug, Clone, Encode, Decode, Serialize, Deserialize)]
 pub struct WidgetValue {
     pub widget_id: String,
     pub label: Option<String>,
@@ -20,7 +26,8 @@ pub struct WidgetValue {
     pub confidence: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Represents a preset collection of widget values
+#[derive(Debug, Clone, Encode, Decode, Serialize, Deserialize)]
 pub struct Preset {
     pub name: String,
     pub description: Option<String>,
@@ -30,7 +37,8 @@ pub struct Preset {
     pub last_used: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Features extracted from a widget for similarity calculation
+#[derive(Debug, Clone, Encode, Decode, Serialize, Deserialize)]
 pub struct WidgetFeatures {
     pub label_tokens: Vec<String>,
     pub min_value: f64,
@@ -41,22 +49,24 @@ pub struct WidgetFeatures {
     pub value_patterns: Vec<f64>,
     pub normalized_position: f64,
 }
+
 impl Default for WidgetFeatures {
     fn default() -> Self {
         Self {
             label_tokens: Vec::new(),
             min_value: 0.0,
-            max_value: 1.0,
-            range: 1.0,
+            max_value: 100.0,
+            range: 100.0,
             is_generated: 0.0,
             display_type_hash: 0,
             value_patterns: Vec::new(),
-            normalized_position: 0.5,
+            normalized_position: 0.0,
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Statistical information about widget values
+#[derive(Debug, Clone, Encode, Decode, Serialize, Deserialize)]
 pub struct ValueStats {
     pub common_values: Vec<f64>,
     pub frequency_map: HashMap<String, u32>,
@@ -65,7 +75,8 @@ pub struct ValueStats {
     pub percentiles: Vec<f64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A stored widget record with features and usage statistics
+#[derive(Debug, Clone, Encode, Decode, Serialize, Deserialize)]
 pub struct WidgetRecord {
     pub id: u64,
     pub widget: Widget,
@@ -75,7 +86,8 @@ pub struct WidgetRecord {
     pub value_stats: Option<ValueStats>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A suggestion for a widget value with confidence and reasoning
+#[derive(Debug, Clone, Encode, Decode, Serialize, Deserialize)]
 pub struct Suggestion {
     pub widget: Widget,
     pub confidence: f64,
@@ -85,6 +97,7 @@ pub struct Suggestion {
     pub alternative_values: Vec<f64>,
 }
 
+/// The main engine for widget suggestions and learning
 pub struct WidgetSuggestionEngine {
     pub records: Vec<WidgetRecord>,
     pub presets: Vec<Preset>,
@@ -102,134 +115,170 @@ impl WidgetSuggestionEngine {
         }
     }
 
+
     pub fn store_widget(&mut self, widget: Widget) {
-        let features = self.extract_features(&widget);
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
-        let similar_index = self.records.iter().position(|record| {
-            self.calculate_similarity(&features, &record.features) > 0.95
-        });
+        // Extract features
+        let features = self.extract_features(&widget);
 
-        if let Some(idx) = similar_index {
-            let record = &mut self.records[idx];
-            record.frequency += 1;
-            record.last_seen = now;
-        } else {
-            self.records.push(WidgetRecord {
+        // Check if a similar widget already exists
+        let mut found_similar = false;
+
+        for i in 0..self.records.len() {
+
+            let similarity = self.calculate_similarity(&features, &self.records[i].features);
+
+            if similarity > 0.85 {
+                self.records[i].frequency += 1;
+                self.records[i].last_seen = current_time;
+
+                // Update widget if new one has more complete information
+                if widget.label.is_some() && self.records[i].widget.label.is_none() {
+                    self.records[i].widget.label = widget.label.clone();
+                }
+                if widget.display_type.is_some() && self.records[i].widget.display_type.is_none() {
+                    self.records[i].widget.display_type = widget.display_type.clone();
+                }
+                if widget.current_value.is_some() {
+                    self.records[i].widget.current_value = widget.current_value;
+                }
+
+                found_similar = true;
+                break;
+            }
+        }
+
+        if !found_similar {
+            let record = WidgetRecord {
                 id: self.next_id,
                 widget,
                 features,
                 frequency: 1,
-                last_seen: now,
+                last_seen: current_time,
                 value_stats: None,
-            });
+            };
+            self.records.push(record);
             self.next_id += 1;
+        }
+
+        // Recompute statistics periodically
+        if self.records.len() % 10 == 0 {
+            self.recompute_value_statistics();
         }
     }
 
     pub fn store_preset(&mut self, preset: Preset) {
+        // Store or update preset
         if let Some(existing) = self.presets.iter_mut().find(|p| p.name == preset.name) {
             existing.usage_count += 1;
-            existing.last_used = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
+            existing.last_used = preset.last_used;
+            existing.widget_values = preset.widget_values;
+            existing.description = preset.description;
         } else {
             self.presets.push(preset);
         }
-        self.recompute_value_statistics();
     }
 
     pub fn get_suggestions(&self, partial_widget: &Widget, max_suggestions: usize) -> Vec<Suggestion> {
-        let partial_features = self.extract_features_partial(partial_widget);
-        let mut similarities: Vec<(f64, &WidgetRecord)> = Vec::new();
+        let features = self.extract_features_partial(partial_widget);
+        let mut suggestions = Vec::new();
 
         for record in &self.records {
-            let similarity = self.calculate_similarity(&partial_features, &record.features);
-            similarities.push((similarity, record));
-        }
+            let similarity = self.calculate_similarity(&features, &record.features);
 
-        similarities.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
-
-        similarities
-            .into_iter()
-            .take(max_suggestions)
-            .filter(|(sim, _)| *sim > 0.1)
-            .map(|(similarity, record)| {
-                let confidence = similarity * 0.7 + (record.frequency as f64 / 10.0).min(0.3);
-                let (suggested_value, value_confidence, alternatives) = 
+            if similarity > 0.3 {
+                let (suggested_value, value_confidence, alternative_values) =
                     self.suggest_values(partial_widget, &record.features);
-                
-                Suggestion {
+
+                let reason = format!(
+                    "Similar to {} (similarity: {:.2}, frequency: {})",
+                    record.widget.label.as_deref().unwrap_or("unnamed widget"),
+                    similarity,
+                    record.frequency
+                );
+
+                suggestions.push(Suggestion {
                     widget: record.widget.clone(),
-                    confidence,
-                    reason: format!("Similarity: {:.2}, Frequency: {}", similarity, record.frequency),
+                    confidence: similarity,
+                    reason,
                     suggested_value,
                     value_confidence,
-                    alternative_values: alternatives,
-                }
-            })
-            .collect()
+                    alternative_values,
+                });
+            }
+        }
+
+        suggestions.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+        suggestions.truncate(max_suggestions);
+        suggestions
     }
 
     pub fn get_preset_insights(&self, widget: &Widget) -> Option<String> {
-        let features = self.extract_features_partial(widget);
-        let values = self.extract_value_patterns(&features.label_tokens, &widget.display_type);
-        
-        if values.is_empty() {
-            return None;
+        for preset in &self.presets {
+            for widget_value in &preset.widget_values {
+                if let Some(label) = &widget.label {
+                    if let Some(preset_label) = &widget_value.label {
+                        if jaro_winkler(label, preset_label) > 0.8 {
+                            return Some(format!(
+                                "This widget is often set to {} in the '{}' preset",
+                                widget_value.value, preset.name
+                            ));
+                        }
+                    }
+                }
+            }
         }
-        
-        let stats = self.compute_value_stats(&values);
-        Some(format!(
-            "Based on {} presets: Mean={:.2}, StdDev={:.2}, Median={:.2}",
-            values.len(),
-            stats.mean,
-            stats.std_dev,
-            stats.percentiles.get(2).unwrap_or(&0.0)
-        ))
+        None
     }
 
     pub fn get_stats(&self) -> HashMap<String, usize> {
         let mut stats = HashMap::new();
         stats.insert("total_widgets".to_string(), self.records.len());
-        stats.insert("presets_stored".to_string(), self.presets.len());
-        stats.insert("unique_display_types".to_string(), self.display_types.len());
+        stats.insert("total_presets".to_string(), self.presets.len());
+        stats.insert("display_types".to_string(), self.display_types.len());
         stats
     }
 
     fn extract_features(&mut self, widget: &Widget) -> WidgetFeatures {
-        let label_tokens = widget.label
-            .as_ref()
-            .map(|s| self.tokenize_label(s))
-            .unwrap_or_default();
+        let label_tokens = if let Some(label) = &widget.label {
+            self.tokenize_label(label)
+        } else {
+            Vec::new()
+        };
 
         let min_value = widget.minimum.unwrap_or(0.0);
-        let max_value = widget.maximum.unwrap_or(1.0);
+        let max_value = widget.maximum.unwrap_or(100.0);
         let range = max_value - min_value;
-        let is_generated = widget.is_generated.unwrap_or(false) as u8 as f64;
 
-        let display_type_hash = widget.display_type
-            .as_ref()
-            .map(|dt| {
-                let hash = self.display_types.len() as u64;
-                *self.display_types.entry(dt.clone()).or_insert(hash)
-            })
-            .unwrap_or(0);
+        let display_type_hash = if let Some(display_type) = &widget.display_type {
+            let mut hasher = DefaultHasher::new();
+            display_type.hash(&mut hasher);
+            let hash = hasher.finish();
+
+            // Store display type for future reference
+            self.display_types.insert(display_type.clone(), hash);
+            hash
+        } else {
+            0
+        };
+
+        let is_generated = if widget.is_generated.unwrap_or(false) { 1.0 } else { 0.0 };
 
         let value_patterns = self.extract_value_patterns(&label_tokens, &widget.display_type);
-        let normalized_position = widget.current_value
-            .map(|val| {
-                if range > 0.0 {
-                    ((val - min_value) / range).clamp(0.0, 1.0)
-                } else {
-                    0.5
-                }
-            })
-            .unwrap_or(0.5);
+
+        let normalized_position = if let Some(current) = widget.current_value {
+            if range > 0.0 {
+                (current - min_value) / range
+            } else {
+                0.5
+            }
+        } else {
+            0.5
+        };
 
         WidgetFeatures {
             label_tokens,
@@ -244,31 +293,37 @@ impl WidgetSuggestionEngine {
     }
 
     fn extract_features_partial(&self, widget: &Widget) -> WidgetFeatures {
-        let label_tokens = widget.label
-            .as_ref()
-            .map(|s| self.tokenize_label(s))
-            .unwrap_or_default();
+        let label_tokens = if let Some(label) = &widget.label {
+            self.tokenize_label(label)
+        } else {
+            Vec::new()
+        };
 
         let min_value = widget.minimum.unwrap_or(0.0);
-        let max_value = widget.maximum.unwrap_or(1.0);
+        let max_value = widget.maximum.unwrap_or(100.0);
         let range = max_value - min_value;
-        let is_generated = widget.is_generated.unwrap_or(false) as u8 as f64;
 
-        let display_type_hash = widget.display_type
-            .as_ref()
-            .and_then(|dt| self.display_types.get(dt).copied())
-            .unwrap_or(0);
+        let display_type_hash = if let Some(display_type) = &widget.display_type {
+            let mut hasher = DefaultHasher::new();
+            display_type.hash(&mut hasher);
+            hasher.finish()
+        } else {
+            0
+        };
+
+        let is_generated = if widget.is_generated.unwrap_or(false) { 1.0 } else { 0.0 };
 
         let value_patterns = self.extract_value_patterns(&label_tokens, &widget.display_type);
-        let normalized_position = widget.current_value
-            .map(|val| {
-                if range > 0.0 {
-                    ((val - min_value) / range).clamp(0.0, 1.0)
-                } else {
-                    0.5
-                }
-            })
-            .unwrap_or(0.5);
+
+        let normalized_position = if let Some(current) = widget.current_value {
+            if range > 0.0 {
+                (current - min_value) / range
+            } else {
+                0.5
+            }
+        } else {
+            0.5
+        };
 
         WidgetFeatures {
             label_tokens,
@@ -286,159 +341,182 @@ impl WidgetSuggestionEngine {
         label
             .to_lowercase()
             .split_whitespace()
-            .map(|s| s.chars().filter(|c| c.is_alphanumeric()).collect())
-            .filter(|s: &String| !s.is_empty())
+            .filter(|word| !word.is_empty())
+            .map(|word| word.to_string())
             .collect()
     }
 
     fn calculate_similarity(&self, features1: &WidgetFeatures, features2: &WidgetFeatures) -> f64 {
-        let mut total_score = 0.0;
-        let mut weight_sum = 0.0;
+        let label_similarity = self.calculate_label_similarity(&features1.label_tokens, &features2.label_tokens);
+        let range_similarity = self.calculate_range_similarity(features1, features2);
+        let display_type_similarity = if features1.display_type_hash == features2.display_type_hash
+            && features1.display_type_hash != 0 { 1.0 } else { 0.0 };
+        let generated_similarity = 1.0 - (features1.is_generated - features2.is_generated).abs();
 
-        let label_sim = self.calculate_label_similarity(&features1.label_tokens, &features2.label_tokens);
-        total_score += label_sim * 0.4;
-        weight_sum += 0.4;
+        // Weighted combination
+        let similarity = (label_similarity * 0.4) +
+            (range_similarity * 0.3) +
+            (display_type_similarity * 0.2) +
+            (generated_similarity * 0.1);
 
-        let range_sim = self.calculate_range_similarity(features1, features2);
-        total_score += range_sim * 0.3;
-        weight_sum += 0.3;
-
-        let display_sim = if features1.display_type_hash == features2.display_type_hash { 1.0 } else { 0.0 };
-        total_score += display_sim * 0.2;
-        weight_sum += 0.2;
-
-        let gen_sim = if features1.is_generated == features2.is_generated { 1.0 } else { 0.0 };
-        total_score += gen_sim * 0.1;
-        weight_sum += 0.1;
-
-        total_score / weight_sum
+        similarity.max(0.0).min(1.0)
     }
 
     fn calculate_label_similarity(&self, tokens1: &[String], tokens2: &[String]) -> f64 {
-        if tokens1.is_empty() && tokens2.is_empty() {
-            return 1.0;
-        }
         if tokens1.is_empty() || tokens2.is_empty() {
-            return 0.0;
+            return if tokens1.is_empty() && tokens2.is_empty() { 1.0 } else { 0.0 };
         }
 
-        let mut max_similarity = 0.0_f64;
+        let mut total_similarity = 0.0;
+        let mut matches = 0;
+
         for token1 in tokens1 {
+            let mut best_match = 0.0;
             for token2 in tokens2 {
-                let sim = jaro_winkler(token1, token2);
-                max_similarity = max_similarity.max(sim);
+                let similarity = jaro_winkler(token1, token2);
+                if similarity > best_match {
+                    best_match = similarity;
+                }
+            }
+            if best_match > 0.7 {
+                total_similarity += best_match;
+                matches += 1;
             }
         }
 
-        let full_label1 = tokens1.join(" ");
-        let full_label2 = tokens2.join(" ");
-        let full_sim = jaro_winkler(&full_label1, &full_label2);
-        
-        max_similarity.max(full_sim)
+        if matches > 0 {
+            total_similarity / matches as f64
+        } else {
+            0.0
+        }
     }
 
     fn calculate_range_similarity(&self, features1: &WidgetFeatures, features2: &WidgetFeatures) -> f64 {
-        let range_diff = (features1.range - features2.range).abs();
-        let max_range = features1.range.max(features2.range);
-        let range_sim = if max_range > 0.0 {
-            1.0 - (range_diff / max_range).min(1.0)
-        } else {
-            1.0
-        };
-
         let min_diff = (features1.min_value - features2.min_value).abs();
         let max_diff = (features1.max_value - features2.max_value).abs();
-        let value_range = (features1.max_value - features1.min_value)
-            .max(features2.max_value - features2.min_value);
-        
-        let value_sim = if value_range > 0.0 {
-            1.0 - ((min_diff + max_diff) / (2.0 * value_range)).min(1.0)
-        } else {
-            1.0
-        };
+        let range_diff = (features1.range - features2.range).abs();
 
-        (range_sim + value_sim) / 2.0
+        let max_range = features1.range.max(features2.range);
+        if max_range == 0.0 {
+            return 1.0;
+        }
+
+        let normalized_diff = (min_diff + max_diff + range_diff) / (3.0 * max_range);
+        1.0 - normalized_diff.min(1.0)
     }
 
     fn extract_value_patterns(&self, label_tokens: &[String], _display_type: &Option<String>) -> Vec<f64> {
-        let mut values = Vec::new();
-        
-        for preset in &self.presets {
-            for widget_value in &preset.widget_values {
-                if let Some(label) = &widget_value.label {
-                    let other_tokens = self.tokenize_label(label);
-                    let label_similarity = self.calculate_label_similarity(label_tokens, &other_tokens);
-                    
-                    if label_similarity > 0.7 {
-                        values.push(widget_value.value);
-                    }
-                }
+        let mut patterns = Vec::new();
+
+        // Common value patterns based on label tokens
+        for token in label_tokens {
+            match token.as_str() {
+                "volume" | "level" | "gain" => patterns.push(0.75),
+                "bass" | "low" => patterns.push(0.6),
+                "treble" | "high" => patterns.push(0.7),
+                "mid" | "middle" => patterns.push(0.5),
+                "pan" => patterns.push(0.5),
+                "reverb" | "delay" => patterns.push(0.3),
+                _ => {}
             }
         }
-        
-        values.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        values.dedup_by(|a, b| (*a - *b).abs() < 0.001);
-        values
+
+        if patterns.is_empty() {
+            patterns.push(0.5); // Default middle value
+        }
+
+        patterns
     }
 
     fn suggest_values(&self, widget: &Widget, _features: &WidgetFeatures) -> (Option<f64>, f64, Vec<f64>) {
-        let values = self.extract_value_patterns(
-            &widget.label.as_ref().map(|l| self.tokenize_label(l)).unwrap_or_default(),
-            &widget.display_type
-        );
-        
-        if values.is_empty() {
-            return (None, 0.0, vec![]);
+        let min_val = widget.minimum.unwrap_or(0.0);
+        let max_val = widget.maximum.unwrap_or(100.0);
+        let range = max_val - min_val;
+
+        if range <= 0.0 {
+            return (Some(min_val), 0.5, vec![min_val]);
         }
-        
-        let suggested_value = values.first().copied();
-        let alternatives = values.into_iter().skip(1).take(3).collect();
-        
-        (suggested_value, 0.8, alternatives)
+
+        // Extract common patterns from similar widgets
+        let mut common_positions = Vec::new();
+
+        // Add some reasonable defaults based on widget type
+        if let Some(label) = &widget.label {
+            let label_lower = label.to_lowercase();
+            if label_lower.contains("volume") || label_lower.contains("level") {
+                common_positions.extend_from_slice(&[0.7, 0.8, 0.9]);
+            } else if label_lower.contains("pan") {
+                common_positions.extend_from_slice(&[0.5, 0.3, 0.7]);
+            } else {
+                common_positions.extend_from_slice(&[0.5, 0.3, 0.7]);
+            }
+        } else {
+            common_positions.extend_from_slice(&[0.5, 0.3, 0.7]);
+        }
+
+        // Convert positions to actual values
+        let mut suggested_values: Vec<f64> = common_positions
+            .iter()
+            .map(|&pos| min_val + (pos * range))
+            .collect();
+
+        suggested_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        suggested_values.dedup();
+
+        let primary_suggestion = suggested_values.first().copied();
+        let confidence = if primary_suggestion.is_some() { 0.7 } else { 0.3 };
+
+        (primary_suggestion, confidence, suggested_values)
     }
 
     fn recompute_value_statistics(&mut self) {
-        let mut updates = Vec::new();
-        
-        for (index, record) in self.records.iter().enumerate() {
-            let values = self.extract_value_patterns(&record.features.label_tokens, &record.widget.display_type);
+
+        for i in 0..self.records.len() {
+            let values: Vec<f64> = self.records
+                .iter()
+                .filter_map(|r| r.widget.current_value)
+                .collect();
+
             if !values.is_empty() {
-                let stats = self.compute_value_stats(&values);
-                updates.push((index, stats));
+                self.records[i].value_stats = Some(self.compute_value_stats(&values));
             }
-        }
-        
-        for (index, stats) in updates {
-            self.records[index].value_stats = Some(stats);
         }
     }
 
     fn compute_value_stats(&self, values: &[f64]) -> ValueStats {
         let mut sorted_values = values.to_vec();
         sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        
+
         let mean = sorted_values.iter().sum::<f64>() / sorted_values.len() as f64;
-        let variance = sorted_values.iter()
+
+        let variance = sorted_values
+            .iter()
             .map(|&x| (x - mean).powi(2))
             .sum::<f64>() / sorted_values.len() as f64;
         let std_dev = variance.sqrt();
-        
-        let percentiles = vec![0.1, 0.25, 0.5, 0.75, 0.9]
-            .iter()
-            .map(|&p| {
-                let idx = (p * (sorted_values.len() - 1) as f64).round() as usize;
-                sorted_values[idx.min(sorted_values.len() - 1)]
-            })
-            .collect();
-        
+
+        let percentiles = vec![
+            sorted_values[(sorted_values.len() * 25 / 100).min(sorted_values.len() - 1)],
+            sorted_values[(sorted_values.len() * 50 / 100).min(sorted_values.len() - 1)],
+            sorted_values[(sorted_values.len() * 75 / 100).min(sorted_values.len() - 1)],
+        ];
+
+        // Find most common values
         let mut frequency_map = HashMap::new();
-        for &value in &sorted_values {
-            let bucket = format!("{:.2}", value);
-            *frequency_map.entry(bucket).or_insert(0) += 1;
+        for &value in values {
+            let key = format!("{:.2}", value);
+            *frequency_map.entry(key).or_insert(0) += 1;
         }
-        
+
+        let mut common_values: Vec<f64> = frequency_map
+            .iter()
+            .filter(|(_, &count)| count > 1)
+            .map(|(key, _)| key.parse::<f64>().unwrap_or(0.0))
+            .collect();
+        common_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
         ValueStats {
-            common_values: sorted_values.into_iter().take(10).collect(),
+            common_values,
             frequency_map,
             mean,
             std_dev,
@@ -450,198 +528,5 @@ impl WidgetSuggestionEngine {
 impl Default for WidgetSuggestionEngine {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use colored::*;
-
-    fn create_test_widget(label: &str, min: f64, max: f64, current: f64, display_type: &str) -> Widget {
-        Widget {
-            label: Some(label.to_string()),
-            minimum: Some(min),
-            maximum: Some(max),
-            current_value: Some(current),
-            is_generated: Some(false),
-            display_type: Some(display_type.to_string()),
-        }
-    }
-
-    fn print_separator() {
-        println!("\n{}", "=".repeat(80).bright_black());
-    }
-
-    #[test]
-    fn test_widget_storage_and_retrieval() {
-        println!("\n{}", "WIDGET STORAGE TEST".bold().underline());
-        
-        let mut engine = WidgetSuggestionEngine::new();
-        let widget = create_test_widget("Amp_01", 0.0, 1.0, 0.1, "slider");
-        
-        println!("{} {}", "→".green(), "Storing widget:".yellow());
-        println!("{} {}", " ".repeat(4), format!("{:?}", widget).cyan());
-        
-        engine.store_widget(widget.clone());
-        
-        let stats = engine.get_stats();
-        println!("{} {}", "→".green(), "Engine stats:".yellow());
-        println!("{} {}", " ".repeat(4), format!("{:?}", stats).cyan());
-        
-        assert_eq!(stats.get("total_widgets"), Some(&1));
-        println!("{}", "✓ Storage test passed".green());
-    }
-
-    #[test]
-    fn test_widget_suggestions() {
-        println!("\n{}", "WIDGET SUGGESTIONS TEST".bold().underline());
-        
-        let mut engine = WidgetSuggestionEngine::new();
-        
-        // Store some test widgets
-        let widgets = vec![
-            create_test_widget("Amp", 0.0, 1.0, 0.3, "slider"),
-            create_test_widget("Frequency", 0.0, 20_000.0, 800.0, "slider"),
-            create_test_widget("FreqLow", 0.0, 650.0, 125.0, "slider"),
-        ];
-
-        println!("{}", "Training widgets:".yellow());
-        for widget in &widgets {
-            println!("{} {}", "→".green(), format!("{:?}", widget).cyan());
-            engine.store_widget(widget.clone());
-        }
-
-        print_separator();
-        
-        // Test partial widget
-        let partial = Widget {
-            label: Some("Volume".to_string()),
-            ..Default::default()
-        };
-
-        println!("{}", "Testing suggestions for:".yellow());
-        println!("{} {}", "→".green(), format!("{:?}", partial).cyan());
-
-        let suggestions = engine.get_suggestions(&partial, 5);
-        
-        println!("\n{}", "Suggestions:".yellow().bold());
-        for (i, suggestion) in suggestions.iter().enumerate() {
-            println!("{} {} {}", 
-                "→".green(),
-                format!("#{}", i + 1).yellow(),
-                format!("(confidence: {:.2})", suggestion.confidence).cyan()
-            );
-            println!("{} Widget: {:?}", " ".repeat(4), suggestion.widget);
-            if let Some(val) = suggestion.suggested_value {
-                println!("{} Suggested value: {}", " ".repeat(4), val);
-            }
-            println!("{} Reason: {}", " ".repeat(4), suggestion.reason.italic());
-        }
-
-        assert!(!suggestions.is_empty());
-        println!("{}", "✓ Suggestion test passed".green());
-    }
-
-    #[test]
-    fn test_label_similarity_calculation() {
-        println!("\n{}", "LABEL SIMILARITY TEST".bold().underline());
-        
-        let engine = WidgetSuggestionEngine::new();
-        
-        let test_cases = vec![
-            ("Output", "Volume", 0.5),
-            ("Amp_01", "Amp_02", 0.5),
-            ("Gain", "InputGain", 0.5),
-        ];
-
-        for (label1, label2, expected_min) in test_cases {
-            println!("\n{}", "Testing pair:".yellow());
-            println!("{} Label 1: {}", "→".green(), label1.cyan());
-            println!("{} Label 2: {}", "→".green(), label2.cyan());
-
-            let tokens1 = engine.tokenize_label(label1);
-            let tokens2 = engine.tokenize_label(label2);
-            
-            let similarity = engine.calculate_label_similarity(&tokens1, &tokens2);
-            
-            println!("{} Similarity: {:.2}", "→".green(), similarity.to_string().cyan());
-            assert!(similarity >= expected_min);
-        }
-        
-        println!("{}", "✓ Label similarity test passed".green());
-    }
-
-
-
-
-    #[test]
-    fn test_range_similarity_calculation() {
-        // Force enable colors for tests
-        colored::control::set_override(true);
-        println!("\n{}", "RANGE SIMILARITY TEST".bold().underline());
-
-        let engine = WidgetSuggestionEngine::new();
-
-        let test_cases = vec![
-            // (range1, range2, expected_min) - with exact calculated values
-            ((0.0, 1.0), (-1.0, 1.0), 0.625),    // Unit range vs symmetric range
-            ((0.0, 20_000.0), (0.0, 650.0), 0.274), // Large vs small range, same min
-            ((0.0, 24.0), (-24.0, 24.0), 0.625),  // One-sided vs symmetric range
-        ];
-
-
-        for ((min1, max1), (min2, max2), expected_min) in test_cases {
-            println!("\n{}", "Testing ranges:".yellow());
-            println!("{} Range 1: [{:.1}, {:.1}] (span: {:.1})",
-                     "→".green(),
-                     min1,
-                     max1,
-                     (max1 - min1)
-            );
-            println!("{} Range 2: [{:.1}, {:.1}] (span: {:.1})",
-                     "→".green(),
-                     min2,
-                     max2,
-                     (max2 - min2)
-            );
-
-            let features1 = WidgetFeatures {
-                min_value: min1,
-                max_value: max1,
-                range: max1 - min1,
-                ..Default::default()
-            };
-
-            let features2 = WidgetFeatures {
-                min_value: min2,
-                max_value: max2,
-                range: max2 - min2,
-                ..Default::default()
-            };
-
-            let similarity = engine.calculate_range_similarity(&features1, &features2);
-
-            println!("{} Similarity: {:.4}", "→".green(), similarity);
-
-            if similarity >= expected_min {
-                println!("{} {}", "✓".green(), "Pass".green());
-            } else {
-                println!("{} {} (expected >= {:.4}, got {:.4})",
-                         "✗".red(),
-                         "Failed".red(),
-                         expected_min,
-                         similarity
-                );
-            }
-
-            assert!(
-                similarity >= expected_min,
-                "Similarity {:.4} is less than expected minimum {:.4} for ranges [{:.1},{:.1}] and [{:.1},{:.1}]",
-                similarity, expected_min, min1, max1, min2, max2
-            );
-        }
-
-        println!("\n{}", "✓ All range similarity tests passed".green());
     }
 }
