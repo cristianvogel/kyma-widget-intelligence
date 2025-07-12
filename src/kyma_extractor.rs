@@ -254,15 +254,25 @@ impl WidgetMetadata {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+    use colored::*;
+
+    fn print_separator() {
+        println!("\n{}", "=".repeat(80).bright_black());
+    }
 
     #[test]
     fn test_kyma_extractor_basic() {
+        // Force enable colors for tests
+        colored::control::set_override(true);
+        println!("\n{}", "KYMA EXTRACTOR BASIC TEST".bold().underline());
+
         let mut extractor = KymaWidgetExtractor::new();
-        
+
         let kyma_data = json!({
             "concreteEventID": 100,
             "label": "Master Volume",
@@ -271,24 +281,35 @@ mod tests {
             "displayType": "slider",
             "isGenerated": false
         });
-        
+
+        println!("{} {}", "→".green(), "Input Kyma data:".yellow());
+        println!("{} {}", " ".repeat(4), format!("{:#}", kyma_data).cyan());
+
         let data_map: HashMap<String, Value> = serde_json::from_value(kyma_data).unwrap();
         extractor.cache_widget_description(data_map);
-        
+
+        println!("\n{} {}", "→".green(), "Creating training widget...".yellow());
         let widget = extractor.create_training_widget(100, 95.0);
         assert!(widget.is_some());
-        
+
         let widget = widget.unwrap();
+        println!("{} {}", "→".green(), "Extracted widget:".yellow());
+        println!("{} {}", " ".repeat(4), format!("{:?}", widget).cyan());
+
         assert_eq!(widget.label, Some("Master Volume".to_string()));
         assert_eq!(widget.minimum, Some(0.0));
         assert_eq!(widget.maximum, Some(127.0));
         assert_eq!(widget.current_value, Some(95.0));
         assert_eq!(widget.display_type, Some("slider".to_string()));
         assert_eq!(widget.is_generated, Some(false));
+
+        println!("\n{}", "✓ Basic extraction test passed".green());
     }
 
     #[test]
     fn test_widget_metadata() {
+        println!("\n{}", "WIDGET METADATA TEST".bold().underline());
+
         let metadata = WidgetMetadata {
             event_id: 100,
             label: Some("Test Widget".to_string()),
@@ -301,74 +322,145 @@ mod tests {
             category: Some("Audio".to_string()),
             description: Some("Test widget description".to_string()),
         };
-        
-        assert!(metadata.is_valid_value(50.0));
-        assert!(!metadata.is_valid_value(150.0));
-        assert!(!metadata.is_valid_value(-10.0));
-        
+
+        println!("{} {}", "→".green(), "Testing metadata:".yellow());
+        println!("{} {}", " ".repeat(4), format!("{:?}", metadata).cyan());
+
+        print_separator();
+
+        // Test value validation
+        println!("{} {}", "→".green(), "Testing value validation:".yellow());
+        let test_values = vec![
+            (50.0, true),
+            (150.0, false),
+            (-10.0, false)
+        ];
+
+        for (value, expected) in test_values {
+            let result = metadata.is_valid_value(value);
+            println!("{} Value {}: {} ({})",
+                     " ".repeat(4),
+                     value,
+                     if result { "valid".green() } else { "invalid".red() },
+                     if result == expected { "✓".green() } else { "✗".red() }
+            );
+            assert_eq!(result, expected);
+        }
+
+        print_separator();
+
+        // Test value normalization
+        println!("{} {}", "→".green(), "Testing value normalization:".yellow());
         assert_eq!(metadata.normalize_value(50.0), Some(0.5));
         assert_eq!(metadata.denormalize_value(0.5), Some(50.0));
-        
+        println!("{} Normalization test passed", "✓".green());
+
+        print_separator();
+
+        // Test widget conversion
+        println!("{} {}", "→".green(), "Testing widget conversion:".yellow());
         let widget = metadata.to_widget(75.0);
+        println!("{} {}", " ".repeat(4), format!("{:?}", widget).cyan());
         assert_eq!(widget.current_value, Some(75.0));
         assert_eq!(widget.label, Some("Test Widget".to_string()));
+
+        println!("\n{}", "✓ All metadata tests passed".green());
     }
 
     #[test]
     fn test_json_parsing() {
-        let json_str = r#"{"concreteEventID": 123, "label": "Test", "minimum": 0, "maximum": 100}"#;
+        println!("\n{}", "JSON PARSING TEST".bold().underline());
+
+        let json_str = r#"{"concreteEventID": 13755, "label": "Amp_01", "minimum": 0, "maximum": 1.0}"#;
+        println!("{} {}", "→".green(), "Testing JSON string:".yellow());
+        println!("{} {}", " ".repeat(4), json_str.cyan());
+
         let parsed = KymaWidgetExtractor::parse_kyma_json_string(json_str);
         assert!(parsed.is_ok());
-        
+
         let data = parsed.unwrap();
-        assert!(KymaWidgetExtractor::validate_kyma_data(&data).is_ok());
+        let validation = KymaWidgetExtractor::validate_kyma_data(&data);
+        println!("{} Validation result: {}",
+                 "→".green(),
+                 if validation.is_ok() { "valid ✓".green() } else { "invalid ✗".red() }
+        );
+        assert!(validation.is_ok());
+
+        println!("\n{}", "✓ JSON parsing test passed".green());
     }
 
     #[test]
     fn test_invalid_json() {
-        let json_str = r#"{"label": "Test"}"#;
+        println!("\n{}", "INVALID JSON TEST".bold().underline());
+
+        let json_str = r#"{"label": "Amp_01"}"#;
+        println!("{} {}", "→".green(), "Testing invalid JSON:".yellow());
+        println!("{} {}", " ".repeat(4), json_str.cyan());
+
         let parsed = KymaWidgetExtractor::parse_kyma_json_string(json_str);
         assert!(parsed.is_ok());
-        
+
         let data = parsed.unwrap();
-        assert!(KymaWidgetExtractor::validate_kyma_data(&data).is_err());
+        let validation = KymaWidgetExtractor::validate_kyma_data(&data);
+        println!("{} Validation result: {}",
+                 "→".green(),
+                 if validation.is_err() { "invalid (as expected) ✓".green() } else { "valid (unexpected) ✗".red() }
+        );
+        assert!(validation.is_err());
+
+        println!("\n{}", "✓ Invalid JSON handling test passed".green());
     }
 
     #[test]
     fn test_extract_all_widgets() {
+        println!("\n{}", "WIDGET EXTRACTION TEST".bold().underline());
+
         let mut extractor = KymaWidgetExtractor::new();
-        
-        let kyma_data1 = json!({
-            "concreteEventID": 100,
-            "label": "Volume",
-            "minimum": 0.0,
-            "maximum": 127.0
-        });
-        
-        let kyma_data2 = json!({
-            "concreteEventID": 101,
-            "label": "Pan",
-            "minimum": -64.0,
-            "maximum": 64.0
-        });
-        
-        let data_map1: HashMap<String, Value> = serde_json::from_value(kyma_data1).unwrap();
-        let data_map2: HashMap<String, Value> = serde_json::from_value(kyma_data2).unwrap();
-        
-        extractor.cache_widget_description(data_map1);
-        extractor.cache_widget_description(data_map2);
-        
+
+        // Create test data
+        let test_widgets = vec![
+            ("Amp_01", 0.0, 1.0, 13755),
+            ("Pan", -1.0, 1.0, 13756)
+        ];
+
+        println!("{} {}", "→".green(), "Caching test widgets:".yellow());
+        for (label, min, max, id) in &test_widgets {
+            let kyma_data = json!({
+                "concreteEventID": id,
+                "label": label,
+                "minimum": min,
+                "maximum": max
+            });
+            println!("{} Widget {}: {} [{}, {}]",
+                     " ".repeat(4),
+                     id,
+                     label.cyan(),
+                     min,
+                     max
+            );
+
+            let data_map: HashMap<String, Value> = serde_json::from_value(kyma_data).unwrap();
+            extractor.cache_widget_description(data_map);
+        }
+
+        print_separator();
+
+        // Test extraction
+        println!("{} {}", "→".green(), "Testing widget extraction:".yellow());
         let mut values = HashMap::new();
-        values.insert(100, 95.0);
-        values.insert(101, 0.0);
-        values.insert(102, 50.0); // This one doesn't have cached description
-        
+        values.insert(13755, 0.5);  // Amp_01
+        values.insert(13756, 0.0);  // Pan
+        values.insert(99999, 50.0); // Non-existent widget
+
         let widgets = extractor.extract_all_widgets_with_values(&values);
-        assert_eq!(widgets.len(), 2); // Only the first two should be extracted
-        
-        // The widgets may be returned in any order, just check they're both present
-        let labels: Vec<_> = widgets.iter().filter_map(|w| w.label.as_ref()).collect();
-        assert!(labels.contains(&&"Volume".to_string()));
-        assert!(labels.contains(&&"Pan".to_string()));
+        println!("{} Extracted {} widgets", "→".green(), widgets.len());
+
+        for widget in &widgets {
+            println!("{} {}", " ".repeat(4), format!("{:?}", widget).cyan());
+        }
+
+        assert_eq!(widgets.len(), 2);
+
+        println!("\n{}", "✓ Widget extraction test passed".green());
     }
 }

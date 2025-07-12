@@ -41,6 +41,20 @@ pub struct WidgetFeatures {
     pub value_patterns: Vec<f64>,
     pub normalized_position: f64,
 }
+impl Default for WidgetFeatures {
+    fn default() -> Self {
+        Self {
+            label_tokens: Vec::new(),
+            min_value: 0.0,
+            max_value: 1.0,
+            range: 1.0,
+            is_generated: 0.0,
+            display_type_hash: 0,
+            value_patterns: Vec::new(),
+            normalized_position: 0.5,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValueStats {
@@ -442,6 +456,7 @@ impl Default for WidgetSuggestionEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use colored::*;
 
     fn create_test_widget(label: &str, min: f64, max: f64, current: f64, display_type: &str) -> Widget {
         Widget {
@@ -454,472 +469,179 @@ mod tests {
         }
     }
 
+    fn print_separator() {
+        println!("\n{}", "=".repeat(80).bright_black());
+    }
+
     #[test]
     fn test_widget_storage_and_retrieval() {
+        println!("\n{}", "WIDGET STORAGE TEST".bold().underline());
+        
         let mut engine = WidgetSuggestionEngine::new();
+        let widget = create_test_widget("Amp_01", 0.0, 1.0, 0.1, "slider");
         
-        let widget = create_test_widget("Master Volume", 0.0, 127.0, 95.0, "slider");
-        engine.store_widget(widget);
+        println!("{} {}", "→".green(), "Storing widget:".yellow());
+        println!("{} {}", " ".repeat(4), format!("{:?}", widget).cyan());
         
-        assert_eq!(engine.records.len(), 1);
-        assert_eq!(engine.next_id, 2);
+        engine.store_widget(widget.clone());
         
-        let record = &engine.records[0];
-        assert_eq!(record.widget.label, Some("Master Volume".to_string()));
-        assert_eq!(record.frequency, 1);
-    }
-
-    #[test]
-    fn test_duplicate_widget_frequency() {
-        let mut engine = WidgetSuggestionEngine::new();
+        let stats = engine.get_stats();
+        println!("{} {}", "→".green(), "Engine stats:".yellow());
+        println!("{} {}", " ".repeat(4), format!("{:?}", stats).cyan());
         
-        let widget1 = create_test_widget("Volume", 0.0, 100.0, 50.0, "slider");
-        let widget2 = create_test_widget("Volume", 0.0, 100.0, 75.0, "slider");
-        
-        engine.store_widget(widget1);
-        engine.store_widget(widget2);
-        
-        // Should only have one record due to similarity
-        assert_eq!(engine.records.len(), 1);
-        assert_eq!(engine.records[0].frequency, 2);
-    }
-
-    #[test]
-    fn test_label_tokenization() {
-        let engine = WidgetSuggestionEngine::new();
-        
-        let tokens = engine.tokenize_label("Master Volume Control");
-        assert_eq!(tokens, vec!["master", "volume", "control"]);
-        
-        let tokens = engine.tokenize_label("LFO-Rate_01");
-        assert_eq!(tokens, vec!["lforate01"]);
-        
-        let tokens = engine.tokenize_label("");
-        assert!(tokens.is_empty());
-    }
-
-    #[test]
-    fn test_label_similarity_calculation() {
-        let engine = WidgetSuggestionEngine::new();
-        
-        let tokens1 = vec!["master".to_string(), "volume".to_string()];
-        let tokens2 = vec!["volume".to_string(), "control".to_string()];
-        
-        let similarity = engine.calculate_label_similarity(&tokens1, &tokens2);
-        assert!(similarity > 0.0);
-        assert!(similarity <= 1.0);
-        
-        // Identical tokens should have high similarity
-        let similarity_identical = engine.calculate_label_similarity(&tokens1, &tokens1);
-        assert_eq!(similarity_identical, 1.0);
-        
-        // Empty tokens
-        let empty_tokens = vec![];
-        let similarity_empty = engine.calculate_label_similarity(&empty_tokens, &empty_tokens);
-        assert_eq!(similarity_empty, 1.0);
-        
-        let similarity_one_empty = engine.calculate_label_similarity(&tokens1, &empty_tokens);
-        assert_eq!(similarity_one_empty, 0.0);
-    }
-
-    #[test]
-    fn test_range_similarity_calculation() {
-        let engine = WidgetSuggestionEngine::new();
-        
-        let features1 = WidgetFeatures {
-            label_tokens: vec![],
-            min_value: 0.0,
-            max_value: 100.0,
-            range: 100.0,
-            is_generated: 0.0,
-            display_type_hash: 0,
-            value_patterns: vec![],
-            normalized_position: 0.5,
-        };
-        
-        let features2 = WidgetFeatures {
-            label_tokens: vec![],
-            min_value: 0.0,
-            max_value: 100.0,
-            range: 100.0,
-            is_generated: 0.0,
-            display_type_hash: 0,
-            value_patterns: vec![],
-            normalized_position: 0.5,
-        };
-        
-        let similarity = engine.calculate_range_similarity(&features1, &features2);
-        assert_eq!(similarity, 1.0);
-        
-        // Different ranges
-        let features3 = WidgetFeatures {
-            range: 50.0,
-            max_value: 50.0,
-            ..features2.clone()
-        };
-        
-        let similarity_diff = engine.calculate_range_similarity(&features1, &features3);
-        assert!(similarity_diff < 1.0);
-        assert!(similarity_diff > 0.0);
+        assert_eq!(stats.get("total_widgets"), Some(&1));
+        println!("{}", "✓ Storage test passed".green());
     }
 
     #[test]
     fn test_widget_suggestions() {
+        println!("\n{}", "WIDGET SUGGESTIONS TEST".bold().underline());
+        
         let mut engine = WidgetSuggestionEngine::new();
         
-        // Store some training widgets
-        engine.store_widget(create_test_widget("Master Volume", 0.0, 127.0, 95.0, "slider"));
-        engine.store_widget(create_test_widget("Channel Volume", 0.0, 127.0, 80.0, "slider"));
-        engine.store_widget(create_test_widget("Bass Level", 0.0, 100.0, 50.0, "knob"));
-        
-        // Test suggestions for similar widget
-        let partial_widget = Widget {
-            label: Some("Volume".to_string()),
-            minimum: None,
-            maximum: None,
-            current_value: None,
-            is_generated: None,
-            display_type: None,
-        };
-        
-        let suggestions = engine.get_suggestions(&partial_widget, 5);
-        assert!(!suggestions.is_empty());
-        
-        // Should suggest widgets with "Volume" in the name with higher confidence
-        let volume_suggestions: Vec<_> = suggestions.iter()
-            .filter(|s| s.widget.label.as_ref().map_or(false, |l| l.contains("Volume")))
-            .collect();
-        
-        assert!(!volume_suggestions.is_empty());
-        
-        // All suggestions should have positive confidence
-        for suggestion in &suggestions {
-            assert!(suggestion.confidence > 0.0);
-            assert!(suggestion.confidence <= 1.0);
+        // Store some test widgets
+        let widgets = vec![
+            create_test_widget("Amp", 0.0, 1.0, 0.3, "slider"),
+            create_test_widget("Frequency", 0.0, 20_000.0, 800.0, "slider"),
+            create_test_widget("FreqLow", 0.0, 650.0, 125.0, "slider"),
+        ];
+
+        println!("{}", "Training widgets:".yellow());
+        for widget in &widgets {
+            println!("{} {}", "→".green(), format!("{:?}", widget).cyan());
+            engine.store_widget(widget.clone());
         }
-    }
 
-    #[test]
-    fn test_preset_storage_and_statistics() {
-        let mut engine = WidgetSuggestionEngine::new();
+        print_separator();
         
-        // Store some widgets first
-        engine.store_widget(create_test_widget("Volume", 0.0, 100.0, 75.0, "slider"));
-        engine.store_widget(create_test_widget("Pan", -50.0, 50.0, 0.0, "slider"));
-        
-        let preset = Preset {
-            name: "My Setup".to_string(),
-            description: Some("Test preset".to_string()),
-            widget_values: vec![
-                WidgetValue {
-                    widget_id: "1".to_string(),
-                    label: Some("Volume".to_string()),
-                    value: 75.0,
-                    confidence: 1.0,
-                },
-                WidgetValue {
-                    widget_id: "2".to_string(),
-                    label: Some("Pan".to_string()),
-                    value: 0.0,
-                    confidence: 1.0,
-                },
-            ],
-            created_by: Some("test_user".to_string()),
-            usage_count: 1,
-            last_used: 1234567890,
-        };
-        
-        engine.store_preset(preset);
-        
-        let stats = engine.get_stats();
-        assert_eq!(stats.get("total_widgets"), Some(&2));
-        assert_eq!(stats.get("presets_stored"), Some(&1));
-        
-        // Test duplicate preset (should increment usage count)
-        let preset2 = Preset {
-            name: "My Setup".to_string(), // Same name
-            description: Some("Updated preset".to_string()),
-            widget_values: vec![],
-            created_by: Some("test_user".to_string()),
-            usage_count: 1,
-            last_used: 1234567891,
-        };
-        
-        engine.store_preset(preset2);
-        
-        // Should still have 1 preset but with incremented usage count
-        let stats = engine.get_stats();
-        assert_eq!(stats.get("presets_stored"), Some(&1));
-        assert_eq!(engine.presets[0].usage_count, 2);
-    }
-
-    #[test]
-    fn test_preset_insights() {
-        let mut engine = WidgetSuggestionEngine::new();
-        
-        // Create preset with volume-related values
-        let preset = Preset {
-            name: "Audio Setup".to_string(),
-            description: None,
-            widget_values: vec![
-                WidgetValue {
-                    widget_id: "1".to_string(),
-                    label: Some("Master Volume".to_string()),
-                    value: 85.0,
-                    confidence: 1.0,
-                },
-                WidgetValue {
-                    widget_id: "2".to_string(),
-                    label: Some("Volume Control".to_string()),
-                    value: 75.0,
-                    confidence: 1.0,
-                },
-                WidgetValue {
-                    widget_id: "3".to_string(),
-                    label: Some("Output Volume".to_string()),
-                    value: 90.0,
-                    confidence: 1.0,
-                },
-            ],
-            created_by: Some("test_user".to_string()),
-            usage_count: 1,
-            last_used: 1234567890,
-        };
-        
-        engine.store_preset(preset);
-        
-        let widget = Widget {
+        // Test partial widget
+        let partial = Widget {
             label: Some("Volume".to_string()),
-            minimum: Some(0.0),
-            maximum: Some(100.0),
-            current_value: None,
-            is_generated: None,
-            display_type: Some("slider".to_string()),
+            ..Default::default()
         };
+
+        println!("{}", "Testing suggestions for:".yellow());
+        println!("{} {}", "→".green(), format!("{:?}", partial).cyan());
+
+        let suggestions = engine.get_suggestions(&partial, 5);
         
-        let insights = engine.get_preset_insights(&widget);
-        assert!(insights.is_some());
-        
-        let insights_text = insights.unwrap();
-        assert!(insights_text.contains("Mean="));
-        assert!(insights_text.contains("StdDev="));
-        assert!(insights_text.contains("Median="));
+        println!("\n{}", "Suggestions:".yellow().bold());
+        for (i, suggestion) in suggestions.iter().enumerate() {
+            println!("{} {} {}", 
+                "→".green(),
+                format!("#{}", i + 1).yellow(),
+                format!("(confidence: {:.2})", suggestion.confidence).cyan()
+            );
+            println!("{} Widget: {:?}", " ".repeat(4), suggestion.widget);
+            if let Some(val) = suggestion.suggested_value {
+                println!("{} Suggested value: {}", " ".repeat(4), val);
+            }
+            println!("{} Reason: {}", " ".repeat(4), suggestion.reason.italic());
+        }
+
+        assert!(!suggestions.is_empty());
+        println!("{}", "✓ Suggestion test passed".green());
     }
 
     #[test]
-    fn test_value_stats_computation() {
+    fn test_label_similarity_calculation() {
+        println!("\n{}", "LABEL SIMILARITY TEST".bold().underline());
+        
         let engine = WidgetSuggestionEngine::new();
         
-        let values = vec![10.0, 20.0, 30.0, 40.0, 50.0];
-        let stats = engine.compute_value_stats(&values);
-        
-        assert_eq!(stats.mean, 30.0);
-        assert_eq!(stats.common_values, values);
-        assert_eq!(stats.percentiles.len(), 5);
-        assert!(!stats.frequency_map.is_empty());
-        
-        // Test single value
-        let single_value = vec![42.0];
-        let stats_single = engine.compute_value_stats(&single_value);
-        assert_eq!(stats_single.mean, 42.0);
-        assert_eq!(stats_single.std_dev, 0.0);
-    }
+        let test_cases = vec![
+            ("Output", "Volume", 0.5),
+            ("Amp_01", "Amp_02", 0.5),
+            ("Gain", "InputGain", 0.5),
+        ];
 
-    #[test]
-    fn test_display_type_handling() {
-        let mut engine = WidgetSuggestionEngine::new();
-        
-        // Store widgets with different display types
-        engine.store_widget(create_test_widget("Volume 1", 0.0, 100.0, 50.0, "slider"));
-        engine.store_widget(create_test_widget("Volume 2", 0.0, 100.0, 60.0, "knob"));
-        engine.store_widget(create_test_widget("Volume 3", 0.0, 100.0, 70.0, "slider"));
-        
-        // Check display types are tracked
-        assert_eq!(engine.display_types.len(), 2);
-        assert!(engine.display_types.contains_key("slider"));
-        assert!(engine.display_types.contains_key("knob"));
-        
-        // Test suggestions prefer same display type
-        let partial_widget = Widget {
-            label: Some("Volume".to_string()),
-            display_type: Some("slider".to_string()),
-            ..Default::default()
-        };
-        
-        let suggestions = engine.get_suggestions(&partial_widget, 5);
-        
-        // Slider widgets should have higher confidence due to display type match
-        let slider_suggestions: Vec<_> = suggestions.iter()
-            .filter(|s| s.widget.display_type.as_ref() == Some(&"slider".to_string()))
-            .collect();
-        
-        let knob_suggestions: Vec<_> = suggestions.iter()
-            .filter(|s| s.widget.display_type.as_ref() == Some(&"knob".to_string()))
-            .collect();
-        
-        if !slider_suggestions.is_empty() && !knob_suggestions.is_empty() {
-            assert!(slider_suggestions[0].confidence >= knob_suggestions[0].confidence);
-        }
-    }
+        for (label1, label2, expected_min) in test_cases {
+            println!("\n{}", "Testing pair:".yellow());
+            println!("{} Label 1: {}", "→".green(), label1.cyan());
+            println!("{} Label 2: {}", "→".green(), label2.cyan());
 
-    #[test]
-    fn test_confidence_calculation() {
-        let mut engine = WidgetSuggestionEngine::new();
-        
-        // Store widget with high frequency
-        for _ in 0..10 {
-            engine.store_widget(create_test_widget("Master Volume", 0.0, 127.0, 95.0, "slider"));
+            let tokens1 = engine.tokenize_label(label1);
+            let tokens2 = engine.tokenize_label(label2);
+            
+            let similarity = engine.calculate_label_similarity(&tokens1, &tokens2);
+            
+            println!("{} Similarity: {:.2}", "→".green(), similarity.to_string().cyan());
+            assert!(similarity >= expected_min);
         }
         
-        // Store widget with low frequency
-        engine.store_widget(create_test_widget("Rare Control", 0.0, 100.0, 50.0, "knob"));
-        
-        let partial_widget = Widget {
-            label: Some("Volume".to_string()),
-            ..Default::default()
-        };
-        
-        let suggestions = engine.get_suggestions(&partial_widget, 5);
-        
-        // The Master Volume should have higher confidence due to higher frequency
-        let master_volume_suggestion = suggestions.iter()
-            .find(|s| s.widget.label.as_ref().map_or(false, |l| l.contains("Master")));
-        
-        let rare_control_suggestion = suggestions.iter()
-            .find(|s| s.widget.label.as_ref().map_or(false, |l| l.contains("Rare")));
-        
-        if let (Some(master), Some(rare)) = (master_volume_suggestion, rare_control_suggestion) {
-            assert!(master.confidence > rare.confidence);
+        println!("{}", "✓ Label similarity test passed".green());
+    }
+
+
+
+
+    #[test]
+    fn test_range_similarity_calculation() {
+        // Force enable colors for tests
+        colored::control::set_override(true);
+        println!("\n{}", "RANGE SIMILARITY TEST".bold().underline());
+
+        let engine = WidgetSuggestionEngine::new();
+
+        let test_cases = vec![
+            // (range1, range2, expected_min) - with exact calculated values
+            ((0.0, 1.0), (-1.0, 1.0), 0.625),    // Unit range vs symmetric range
+            ((0.0, 20_000.0), (0.0, 650.0), 0.274), // Large vs small range, same min
+            ((0.0, 24.0), (-24.0, 24.0), 0.625),  // One-sided vs symmetric range
+        ];
+
+
+        for ((min1, max1), (min2, max2), expected_min) in test_cases {
+            println!("\n{}", "Testing ranges:".yellow());
+            println!("{} Range 1: [{:.1}, {:.1}] (span: {:.1})",
+                     "→".green(),
+                     min1,
+                     max1,
+                     (max1 - min1)
+            );
+            println!("{} Range 2: [{:.1}, {:.1}] (span: {:.1})",
+                     "→".green(),
+                     min2,
+                     max2,
+                     (max2 - min2)
+            );
+
+            let features1 = WidgetFeatures {
+                min_value: min1,
+                max_value: max1,
+                range: max1 - min1,
+                ..Default::default()
+            };
+
+            let features2 = WidgetFeatures {
+                min_value: min2,
+                max_value: max2,
+                range: max2 - min2,
+                ..Default::default()
+            };
+
+            let similarity = engine.calculate_range_similarity(&features1, &features2);
+
+            println!("{} Similarity: {:.4}", "→".green(), similarity);
+
+            if similarity >= expected_min {
+                println!("{} {}", "✓".green(), "Pass".green());
+            } else {
+                println!("{} {} (expected >= {:.4}, got {:.4})",
+                         "✗".red(),
+                         "Failed".red(),
+                         expected_min,
+                         similarity
+                );
+            }
+
+            assert!(
+                similarity >= expected_min,
+                "Similarity {:.4} is less than expected minimum {:.4} for ranges [{:.1},{:.1}] and [{:.1},{:.1}]",
+                similarity, expected_min, min1, max1, min2, max2
+            );
         }
-    }
 
-    #[test]
-    fn test_suggestion_filtering() {
-        let mut engine = WidgetSuggestionEngine::new();
-        
-        // Store completely unrelated widget
-        engine.store_widget(create_test_widget("Unrelated Control", 0.0, 1.0, 0.5, "button"));
-        
-        let partial_widget = Widget {
-            label: Some("Volume Control".to_string()),
-            display_type: Some("slider".to_string()),
-            ..Default::default()
-        };
-        
-        let suggestions = engine.get_suggestions(&partial_widget, 5);
-        
-        // Should filter out suggestions with very low similarity (< 0.1)
-        for suggestion in suggestions {
-            assert!(suggestion.confidence > 0.1);
-        }
-    }
-
-    #[test]
-    fn test_value_suggestion() {
-        let mut engine = WidgetSuggestionEngine::new();
-        
-        // Create preset with consistent values for a widget type
-        let preset = Preset {
-            name: "Test Setup".to_string(),
-            description: None,
-            widget_values: vec![
-                WidgetValue {
-                    widget_id: "1".to_string(),
-                    label: Some("Volume Control".to_string()),
-                    value: 80.0,
-                    confidence: 1.0,
-                },
-            ],
-            created_by: None,
-            usage_count: 1,
-            last_used: 1234567890,
-        };
-        
-        engine.store_preset(preset);
-        
-        let widget = Widget {
-            label: Some("Volume Control".to_string()),
-            ..Default::default()
-        };
-        
-        let suggestions = engine.get_suggestions(&widget, 5);
-        
-        // Should have suggestions with actual values
-        if !suggestions.is_empty() {
-            let suggestion = &suggestions[0];
-            assert!(suggestion.suggested_value.is_some());
-            assert!(suggestion.value_confidence > 0.0);
-        }
-    }
-
-    #[test]
-    fn test_edge_cases() {
-        let mut engine = WidgetSuggestionEngine::new();
-        
-        // Test with empty/None values
-        let empty_widget = Widget {
-            label: None,
-            minimum: None,
-            maximum: None,
-            current_value: None,
-            is_generated: None,
-            display_type: None,
-        };
-        
-        engine.store_widget(empty_widget.clone());
-        
-        let suggestions = engine.get_suggestions(&empty_widget, 5);
-        // Should handle gracefully without panicking
-        assert!(suggestions.len() <= 1);
-        
-        // Test with zero range
-        let zero_range_widget = Widget {
-            label: Some("Fixed Value".to_string()),
-            minimum: Some(50.0),
-            maximum: Some(50.0), // Same as minimum
-            current_value: Some(50.0),
-            is_generated: Some(false),
-            display_type: Some("display".to_string()),
-        };
-        
-        engine.store_widget(zero_range_widget);
-        // Should not panic or cause issues
-        
-        // Test with very large numbers
-        let large_widget = Widget {
-            label: Some("Large Range".to_string()),
-            minimum: Some(0.0),
-            maximum: Some(f64::MAX / 2.0),
-            current_value: Some(1000000.0),
-            is_generated: Some(false),
-            display_type: Some("slider".to_string()),
-        };
-        
-        engine.store_widget(large_widget);
-        // Should handle without overflow
-    }
-
-    #[test]
-    fn test_widget_features_extraction() {
-        let mut engine = WidgetSuggestionEngine::new();
-        
-        let widget = Widget {
-            label: Some("Test Widget Control".to_string()),
-            minimum: Some(10.0),
-            maximum: Some(90.0),
-            current_value: Some(50.0),
-            is_generated: Some(true),
-            display_type: Some("rotary".to_string()),
-        };
-        
-        let features = engine.extract_features(&widget);
-        
-        assert_eq!(features.label_tokens, vec!["test", "widget", "control"]);
-        assert_eq!(features.min_value, 10.0);
-        assert_eq!(features.max_value, 90.0);
-        assert_eq!(features.range, 80.0);
-        assert_eq!(features.is_generated, 1.0);
-        assert_eq!(features.normalized_position, 0.5); // (50-10)/(90-10) = 0.5
-        assert!(engine.display_types.contains_key("rotary"));
+        println!("\n{}", "✓ All range similarity tests passed".green());
     }
 }

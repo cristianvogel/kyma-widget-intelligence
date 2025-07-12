@@ -251,16 +251,26 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use std::fs;
+    use colored::*;
     use crate::similarity_engine::Widget;
+
 
     #[test]
     fn test_persistence_basic_operations() -> Result<(), Box<dyn std::error::Error>> {
+        // Force enable colors for tests
+        colored::control::set_override(true);
+
+        println!("\n{}", "PERSISTENCE TEST".bold().underline());
+        
         let temp_dir = tempdir()?;
         let db_path = temp_dir.path().join("test_persistence_basic");
+        
+        println!("{} {}", "→".green(), format!("Using database path: {:?}", db_path).cyan());
         
         // Ensure the directory exists
         fs::create_dir_all(&db_path)?;
         
+        println!("{} {}", "→".green(), "Initializing system...".yellow());
         let mut system = PersistentWidgetSuggestionEngine::new(&db_path)?;
         
         let widget = Widget {
@@ -272,38 +282,40 @@ mod tests {
             display_type: Some("slider".to_string()),
         };
         
+        println!("\n{}", "STORING WIDGET".bold().underline());
+        println!("{} {}", "→".green(), format!("Widget: {:?}", widget).cyan());
+        
         system.store_widget(widget)?;
         
         let stats = system.get_stats();
+        println!("{} {}", "→".green(), format!("Stats after storage: {:?}", stats).yellow());
         assert_eq!(stats.get("total_widgets"), Some(&1));
         
-        // Ensure changes are flushed to disk
+        println!("\n{}", "PERSISTENCE CHECK".bold().underline());
+        println!("{} {}", "→".green(), "Flushing changes...".yellow());
         system.flush()?;
-        
-        // Explicitly drop the first system to release the database
         drop(system);
         
+        println!("{} {}", "→".green(), "Creating new system instance...".yellow());
         let system2 = PersistentWidgetSuggestionEngine::new(&db_path)?;
         let stats2 = system2.get_stats();
+        println!("{} {}", "→".green(), format!("Stats after reload: {:?}", stats2).cyan());
         assert_eq!(stats2.get("total_widgets"), Some(&1));
         
-        // Clean up by dropping the system and removing the temp directory
-        drop(system2);
-        fs::remove_dir_all(&db_path)?;
-        
+        println!("\n{}", "TEST COMPLETED".bold().green());
         Ok(())
     }
 
     #[test]
     fn test_export_import() -> Result<(), Box<dyn std::error::Error>> {
+        println!("\n{}", "EXPORT/IMPORT TEST".bold().underline());
+        
         let temp_dir = tempdir()?;
         let db_path1 = temp_dir.path().join("test_export_1");
         let db_path2 = temp_dir.path().join("test_export_2");
         
-        // Ensure directories exist
+        println!("{} {}", "→".green(), "Creating source database...".yellow());
         fs::create_dir_all(&db_path1)?;
-        fs::create_dir_all(&db_path2)?;
-        
         let mut system1 = PersistentWidgetSuggestionEngine::new(&db_path1)?;
         
         let widget = Widget {
@@ -315,27 +327,30 @@ mod tests {
             display_type: Some("knob".to_string()),
         };
         
+        println!("\n{}", "STORING TEST DATA".bold().underline());
+        println!("{} {}", "→".green(), format!("Widget: {:?}", widget).cyan());
         system1.store_widget(widget)?;
-        system1.flush()?;
         
-        let stats1 = system1.get_stats();
+        println!("\n{}", "EXPORTING DATA".bold().underline());
         let export_data = system1.export_data()?;
-
-        // Drop system1 before creating system2
-        drop(system1);
-
+        println!("{} {}", "→".green(), format!("Exported {} widgets", export_data.widgets.len()).yellow());
+        
+        println!("\n{}", "IMPORTING DATA".bold().underline());
+        println!("{} {}", "→".green(), "Creating destination database...".yellow());
+        fs::create_dir_all(&db_path2)?;
         let mut system2 = PersistentWidgetSuggestionEngine::new(&db_path2)?;
         system2.import_data(export_data)?;
-
+        
+        let stats1 = system1.get_stats();
         let stats2 = system2.get_stats();
-
+        
+        println!("\n{}", "VERIFICATION".bold().underline());
+        println!("{} {}", "→".green(), format!("Source stats: {:?}", stats1).cyan());
+        println!("{} {}", "→".green(), format!("Destination stats: {:?}", stats2).cyan());
+        
         assert_eq!(stats1.get("total_widgets"), stats2.get("total_widgets"));
         
-        // Clean up
-        drop(system2);
-        fs::remove_dir_all(&db_path1)?;
-        fs::remove_dir_all(&db_path2)?;
-        
+        println!("\n{}", "TEST COMPLETED".bold().green());
         Ok(())
     }
 }
