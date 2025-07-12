@@ -1,4 +1,4 @@
-# Widget Intelligence
+# Kyma Widget Intelligence
 
 A Rust library for intelligent widget suggestion and learning based on user behavior patterns.
 
