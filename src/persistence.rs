@@ -250,12 +250,16 @@ pub struct ExportData {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+    use std::fs;
     use crate::similarity_engine::Widget;
 
     #[test]
     fn test_persistence_basic_operations() -> Result<(), Box<dyn std::error::Error>> {
         let temp_dir = tempdir()?;
         let db_path = temp_dir.path().join("test_persistence_basic");
+        
+        // Ensure the directory exists
+        fs::create_dir_all(&db_path)?;
         
         let mut system = PersistentWidgetSuggestionEngine::new(&db_path)?;
         
@@ -273,11 +277,19 @@ mod tests {
         let stats = system.get_stats();
         assert_eq!(stats.get("total_widgets"), Some(&1));
         
+        // Ensure changes are flushed to disk
         system.flush()?;
+        
+        // Explicitly drop the first system to release the database
+        drop(system);
         
         let system2 = PersistentWidgetSuggestionEngine::new(&db_path)?;
         let stats2 = system2.get_stats();
         assert_eq!(stats2.get("total_widgets"), Some(&1));
+        
+        // Clean up by dropping the system and removing the temp directory
+        drop(system2);
+        fs::remove_dir_all(&db_path)?;
         
         Ok(())
     }
@@ -287,6 +299,10 @@ mod tests {
         let temp_dir = tempdir()?;
         let db_path1 = temp_dir.path().join("test_export_1");
         let db_path2 = temp_dir.path().join("test_export_2");
+        
+        // Ensure directories exist
+        fs::create_dir_all(&db_path1)?;
+        fs::create_dir_all(&db_path2)?;
         
         let mut system1 = PersistentWidgetSuggestionEngine::new(&db_path1)?;
         
@@ -300,16 +316,25 @@ mod tests {
         };
         
         system1.store_widget(widget)?;
-        
-        let export_data = system1.export_data()?;
-        
-        let mut system2 = PersistentWidgetSuggestionEngine::new(&db_path2)?;
-        system2.import_data(export_data)?;
+        system1.flush()?;
         
         let stats1 = system1.get_stats();
+        let export_data = system1.export_data()?;
+
+        // Drop system1 before creating system2
+        drop(system1);
+
+        let mut system2 = PersistentWidgetSuggestionEngine::new(&db_path2)?;
+        system2.import_data(export_data)?;
+
         let stats2 = system2.get_stats();
-        
+
         assert_eq!(stats1.get("total_widgets"), stats2.get("total_widgets"));
+        
+        // Clean up
+        drop(system2);
+        fs::remove_dir_all(&db_path1)?;
+        fs::remove_dir_all(&db_path2)?;
         
         Ok(())
     }
