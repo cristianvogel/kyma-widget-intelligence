@@ -16,7 +16,7 @@ impl KymaWidgetExtractor {
     pub fn cache_widget_description(&mut self, kyma_data: HashMap<String, Value>) {
         if let Some(Value::Number(event_id)) = kyma_data.get("concreteEventID") {
             if let Some(id) = event_id.as_i64() {
-                log::trace!("Caching widget description for event ID: {}", id);
+                log::trace!("Caching widget description for event ID: {id}");
                 self.widget_descriptions.insert(id, kyma_data);
             }
         }
@@ -130,11 +130,7 @@ impl KymaWidgetExtractor {
                     _ => None,
                 },
                 Value::Number(n) => {
-                    if let Some(num) = n.as_i64() {
-                        Some(num != 0)
-                    } else {
-                        None
-                    }
+                    n.as_i64().map(|num| num != 0)
                 },
                 _ => None,
             }
@@ -174,7 +170,7 @@ impl KymaWidgetExtractor {
     }
 
     pub fn parse_kyma_json_string(json_str: &str) -> Result<HashMap<String, Value>, String> {
-        serde_json::from_str(json_str).map_err(|e| format!("Failed to parse JSON: {}", e))
+        serde_json::from_str(json_str).map_err(|e| format!("Failed to parse JSON: {e}"))
     }
 
     pub fn validate_kyma_data(data: &HashMap<String, Value>) -> Result<(), String> {

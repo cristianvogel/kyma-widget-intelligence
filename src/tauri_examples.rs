@@ -45,7 +45,7 @@ pub struct StandaloneIntelligenceService {
 impl StandaloneIntelligenceService {
     pub fn new(db_path: &str) -> Result<Self, String> {
         let system = crate::PersistentWidgetSuggestionEngine::new(db_path)
-            .map_err(|e| format!("Failed to initialize intelligence system: {:?}", e))?;
+            .map_err(|e| format!("Failed to initialize intelligence system: {e:?}"))?;
 
         let extractor = crate::KymaWidgetExtractor::new();
 
@@ -61,16 +61,16 @@ impl StandaloneIntelligenceService {
         kyma_json: String,
     ) -> Result<(), String> {
         let kyma_data: HashMap<String, serde_json::Value> = serde_json::from_str(&kyma_json)
-            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+            .map_err(|e| format!("Failed to parse JSON: {e}"))?;
 
         crate::kyma_extractor::KymaWidgetExtractor::validate_kyma_data(&kyma_data)
-            .map_err(|e| format!("Invalid Kyma data: {}", e))?;
+            .map_err(|e| format!("Invalid Kyma data: {e}"))?;
 
         let mut extractor = self.extractor.lock()
             .map_err(|_| "Failed to lock extractor")?;
 
         extractor.cache_widget_description(kyma_data);
-        log::debug!("Cached widget description for event ID: {}", event_id);
+        log::debug!("Cached widget description for event ID: {event_id}");
         Ok(())
     }
 
@@ -93,7 +93,7 @@ impl StandaloneIntelligenceService {
         for (event_id, current_value) in &event_values {
             if let Some(training_widget) = extractor.create_training_widget(*event_id, *current_value) {
                 system.store_widget(training_widget.clone())
-                    .map_err(|e| format!("Failed to store widget: {:?}", e))?;
+                    .map_err(|e| format!("Failed to store widget: {e:?}"))?;
 
                 widget_values.push(crate::WidgetValue {
                     widget_id: event_id.to_string(),
@@ -117,7 +117,7 @@ impl StandaloneIntelligenceService {
         };
 
         system.store_preset(preset)
-            .map_err(|e| format!("Failed to store preset: {:?}", e))?;
+            .map_err(|e| format!("Failed to store preset: {e:?}"))?;
 
         let stats = system.get_stats();
         Ok(IntelligenceStats {

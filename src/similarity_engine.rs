@@ -594,7 +594,7 @@ impl WidgetSuggestionEngine {
         // Find most common values
         let mut frequency_map = HashMap::new();
         for &value in values {
-            let key = format!("{:.2}", value);
+            let key = format!("{value:.2}");
             *frequency_map.entry(key).or_insert(0) += 1;
         }
 
