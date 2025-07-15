@@ -9,7 +9,7 @@ use strsim::jaro_winkler;
 /// Type alias for filtered widget description from JSON
 pub type FilteredWidgetDescription = HashMap<String, serde_json::Value>;
 
-/// Represents a widget with its properties and current value
+/// Represents a widget with its properties and snapshot of current value
 #[derive(Debug, Clone, Encode, Decode, Serialize, Deserialize)]
 pub struct Widget {
     pub label: Option<String>,
@@ -116,7 +116,7 @@ impl From<FilteredWidgetDescription> for WidgetRecord {
             label: extract_string(&filtered, "label"),
             minimum: extract_f64(&filtered, "minimum"),
             maximum: extract_f64(&filtered, "maximum"),
-            current_value: None, // Not typically in the filtered description
+            current_value: extract_f64(&filtered, "current_value"),
             is_generated: extract_bool(&filtered, "isGenerated"),
             display_type: extract_string(&filtered, "displayType"),
         };
