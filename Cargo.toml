@@ -1,6 +1,6 @@
 [package]
 name = "widget_intelligence"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "A Rust library for intelligent Kyma widget suggestion and learning"
 license = "MIT OR Apache-2.0"
