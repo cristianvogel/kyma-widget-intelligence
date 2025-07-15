@@ -48,7 +48,8 @@ pub mod tauri_examples;
 // Re-export main types for convenience
 pub use similarity_engine::{
     Widget, WidgetValue, Preset, WidgetSuggestionEngine, 
-    Suggestion, WidgetRecord, WidgetFeatures, ValueStats
+    Suggestion, WidgetRecord, WidgetFeatures, ValueStats,
+    FilteredWidgetDescription
 };
 
 pub use persistence::{

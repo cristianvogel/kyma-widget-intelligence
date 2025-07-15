@@ -32,9 +32,9 @@ impl From<bincode::error::DecodeError> for SledPersistenceError {
 impl std::fmt::Display for SledPersistenceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SledPersistenceError::DatabaseError(e) => write!(f, "Database error: {}", e),
-            SledPersistenceError::SerializationError(e) => write!(f, "Serialization error: {}", e),
-            SledPersistenceError::DeserializationError(e) => write!(f, "Deserialization error: {}", e),
+            SledPersistenceError::DatabaseError(e) => write!(f, "Database error: {e}"),
+            SledPersistenceError::SerializationError(e) => write!(f, "Serialization error: {e}"),
+            SledPersistenceError::DeserializationError(e) => write!(f, "Deserialization error: {e}"),
         }
     }
 }
@@ -80,7 +80,7 @@ impl SledPersistenceManager {
             match bincode::decode_from_slice(&value, bincode::config::standard()) {
                 Ok((record, _)) => records.push(record),
                 Err(e) => {
-                    log::warn!("Failed to decode widget record with bincode: {}", e);
+                    log::warn!("Failed to decode widget record with bincode: {e}");
                 }
             }
         }
@@ -104,7 +104,7 @@ impl SledPersistenceManager {
             match bincode::decode_from_slice(&value, bincode::config::standard()) {
                 Ok((preset, _)) => presets.push(preset),
                 Err(e) => {
-                    log::warn!("Failed to decode preset with bincode: {}", e);
+                    log::warn!("Failed to decode preset with bincode: {e}");
                 }
             }
         }
@@ -169,7 +169,7 @@ impl PersistentWidgetSuggestionEngine {
                 log::info!("Loaded {} widget records from database", engine.records.len());
             }
             Err(e) => {
-                log::warn!("Failed to load widgets from database: {}", e);
+                log::warn!("Failed to load widgets from database: {e}");
             }
         }
 
@@ -179,7 +179,7 @@ impl PersistentWidgetSuggestionEngine {
                 log::info!("Loaded {} presets from database", engine.presets.len());
             }
             Err(e) => {
-                log::warn!("Failed to load presets from database: {}", e);
+                log::warn!("Failed to load presets from database: {e}");
             }
         }
 

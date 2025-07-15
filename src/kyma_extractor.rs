@@ -86,7 +86,7 @@ impl KymaWidgetExtractor {
         }
         
         if let Some(Value::Number(event_id)) = data.get("concreteEventID") {
-            return Some(format!("Widget {}", event_id));
+            return Some(format!("Widget {event_id}" ));
         }
         
         None

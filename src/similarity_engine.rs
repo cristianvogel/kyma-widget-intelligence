@@ -6,6 +6,9 @@ use std::hash::{Hash, Hasher};
 use std::time::{SystemTime, UNIX_EPOCH};
 use strsim::jaro_winkler;
 
+/// Type alias for filtered widget description from JSON
+pub type FilteredWidgetDescription = HashMap<String, serde_json::Value>;
+
 /// Represents a widget with its properties and current value
 #[derive(Debug, Clone, Encode, Decode, Serialize, Deserialize)]
 pub struct Widget {
@@ -84,6 +87,93 @@ pub struct WidgetRecord {
     pub frequency: u32,
     pub last_seen: u64,
     pub value_stats: Option<ValueStats>,
+}
+
+impl From<FilteredWidgetDescription> for WidgetRecord {
+    fn from(filtered: FilteredWidgetDescription) -> Self {
+        // Helper function to extract string values from JSON
+        fn extract_string(map: &HashMap<String, serde_json::Value>, key: &str) -> Option<String> {
+            map.get(key).and_then(|v| v.as_str().map(|s| s.to_string()))
+        }
+        
+        // Helper function to extract f64 values from JSON
+        fn extract_f64(map: &HashMap<String, serde_json::Value>, key: &str) -> Option<f64> {
+            map.get(key).and_then(|v| v.as_f64())
+        }
+        
+        // Helper function to extract bool values from JSON
+        fn extract_bool(map: &HashMap<String, serde_json::Value>, key: &str) -> Option<bool> {
+            map.get(key).and_then(|v| v.as_bool())
+        }
+        
+        // Helper function to extract u64 values from JSON
+        fn extract_u64(map: &HashMap<String, serde_json::Value>, key: &str) -> Option<u64> {
+            map.get(key).and_then(|v| v.as_u64())
+        }
+        
+        // Extract widget data from the filtered description
+        let widget = Widget {
+            label: extract_string(&filtered, "label"),
+            minimum: extract_f64(&filtered, "minimum"),
+            maximum: extract_f64(&filtered, "maximum"),
+            current_value: None, // Not typically in the filtered description
+            is_generated: extract_bool(&filtered, "isGenerated"),
+            display_type: extract_string(&filtered, "displayType"),
+        };
+        
+        // Create basic features from the widget data
+        let label_tokens = if let Some(ref label) = widget.label {
+            label.to_lowercase()
+                .split_whitespace()
+                .map(|s| s.chars().filter(|c| c.is_alphanumeric()).collect())
+                .filter(|s: &String| !s.is_empty())
+                .collect()
+        } else {
+            Vec::new()
+        };
+        
+        let min_value = widget.minimum.unwrap_or(0.0);
+        let max_value = widget.maximum.unwrap_or(100.0);
+        let range = max_value - min_value;
+        
+        // Calculate display type hash
+        let display_type_hash = if let Some(ref display_type) = widget.display_type {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            std::hash::Hash::hash(display_type, &mut hasher);
+            std::hash::Hasher::finish(&hasher)
+        } else {
+            0
+        };
+        
+        let features = WidgetFeatures {
+            label_tokens,
+            min_value,
+            max_value,
+            range,
+            is_generated: if widget.is_generated.unwrap_or(false) { 1.0 } else { 0.0 },
+            display_type_hash,
+            value_patterns: Vec::new(), // Will be populated by the engine
+            normalized_position: 0.5, // Default middle position
+        };
+        
+        // Get current timestamp
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+            .as_secs();
+        
+        // Extract ID from concreteEventID if available, otherwise use 0
+        let id = extract_u64(&filtered, "concreteEventID").unwrap_or(0);
+        
+        WidgetRecord {
+            id,
+            widget,
+            features,
+            frequency: 1,
+            last_seen: current_time,
+            value_stats: None,
+        }
+    }
 }
 
 /// A suggestion for a widget value with confidence and reasoning
@@ -528,5 +618,60 @@ impl WidgetSuggestionEngine {
 impl Default for WidgetSuggestionEngine {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod conversion_tests {
+    use super::*;
+
+    #[test]
+    fn test_filtered_widget_description_conversion() {
+        let mut filtered = FilteredWidgetDescription::new();
+        filtered.insert("concreteEventID".to_string(), serde_json::Value::Number(serde_json::Number::from(42)));
+        filtered.insert("label".to_string(), serde_json::Value::String("Master Volume".to_string()));
+        filtered.insert("minimum".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(0.0).unwrap()));
+        filtered.insert("maximum".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(127.0).unwrap()));
+        filtered.insert("displayType".to_string(), serde_json::Value::String("slider".to_string()));
+        filtered.insert("isGenerated".to_string(), serde_json::Value::Bool(false));
+        
+        // Test the conversion using the From trait - this is the idiomatic way
+        let widget_record: WidgetRecord = filtered.into();
+        
+        assert_eq!(widget_record.id, 42);
+        assert_eq!(widget_record.widget.label, Some("Master Volume".to_string()));
+        assert_eq!(widget_record.widget.minimum, Some(0.0));
+        assert_eq!(widget_record.widget.maximum, Some(127.0));
+        assert_eq!(widget_record.widget.display_type, Some("slider".to_string()));
+        assert_eq!(widget_record.widget.is_generated, Some(false));
+        assert_eq!(widget_record.frequency, 1);
+        assert_eq!(widget_record.features.label_tokens, vec!["master", "volume"]);
+        assert_eq!(widget_record.features.min_value, 0.0);
+        assert_eq!(widget_record.features.max_value, 127.0);
+        assert_eq!(widget_record.features.range, 127.0);
+        assert_eq!(widget_record.features.is_generated, 0.0);
+        assert!(widget_record.features.display_type_hash != 0);
+    }
+
+    #[test]
+    fn test_conversion_with_missing_fields() {
+        // Test conversion when some fields are missing
+        let mut filtered = FilteredWidgetDescription::new();
+        filtered.insert("concreteEventID".to_string(), serde_json::Value::Number(serde_json::Number::from(100)));
+        filtered.insert("label".to_string(), serde_json::Value::String("Test Control".to_string()));
+        // Note: missing minimum, maximum, displayType, isGenerated
+        
+        let widget_record: WidgetRecord = filtered.into();
+        
+        assert_eq!(widget_record.id, 100);
+        assert_eq!(widget_record.widget.label, Some("Test Control".to_string()));
+        assert_eq!(widget_record.widget.minimum, None);
+        assert_eq!(widget_record.widget.maximum, None);
+        assert_eq!(widget_record.widget.display_type, None);
+        assert_eq!(widget_record.widget.is_generated, None);
+        assert_eq!(widget_record.features.min_value, 0.0); // Default value
+        assert_eq!(widget_record.features.max_value, 100.0); // Default value
+        assert_eq!(widget_record.features.range, 100.0);
+        assert_eq!(widget_record.features.display_type_hash, 0);
     }
 }
