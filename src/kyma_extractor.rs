@@ -1,6 +1,6 @@
+use crate::similarity_engine::Widget;
 use serde_json::Value;
 use std::collections::HashMap;
-use crate::similarity_engine::Widget;
 
 pub struct KymaWidgetExtractor {
     widget_descriptions: HashMap<i64, HashMap<String, Value>>,
@@ -24,7 +24,7 @@ impl KymaWidgetExtractor {
 
     pub fn create_training_widget(&self, event_id: i64, current_value: f64) -> Option<Widget> {
         let kyma_data = self.widget_descriptions.get(&event_id)?;
-        
+
         let widget = Widget {
             label: self.extract_label(kyma_data),
             minimum: self.extract_float_field(kyma_data, "minimum"),
@@ -34,7 +34,11 @@ impl KymaWidgetExtractor {
             display_type: self.extract_display_type(kyma_data),
         };
 
-        log::trace!("Created training widget for event ID {}: {:?}", event_id, widget.label);
+        log::trace!(
+            "Created training widget for event ID {}: {:?}",
+            event_id,
+            widget.label
+        );
         Some(widget)
     }
 
@@ -56,13 +60,13 @@ impl KymaWidgetExtractor {
 
     pub fn extract_all_widgets_with_values(&self, values: &HashMap<i64, f64>) -> Vec<Widget> {
         let mut widgets = Vec::new();
-        
+
         for (&event_id, &value) in values {
             if let Some(widget) = self.create_training_widget(event_id, value) {
                 widgets.push(widget);
             }
         }
-        
+
         widgets
     }
 
@@ -72,23 +76,23 @@ impl KymaWidgetExtractor {
                 return Some(label.clone());
             }
         }
-        
+
         if let Some(Value::String(name)) = data.get("name") {
             if !name.is_empty() {
                 return Some(name.clone());
             }
         }
-        
+
         if let Some(Value::String(title)) = data.get("title") {
             if !title.is_empty() {
                 return Some(title.clone());
             }
         }
-        
+
         if let Some(Value::Number(event_id)) = data.get("concreteEventID") {
-            return Some(format!("Widget {event_id}" ));
+            return Some(format!("Widget {event_id}"));
         }
-        
+
         None
     }
 
@@ -96,15 +100,15 @@ impl KymaWidgetExtractor {
         if let Some(Value::String(display_type)) = data.get("displayType") {
             return Some(display_type.clone());
         }
-        
+
         if let Some(Value::String(widget_type)) = data.get("widgetType") {
             return Some(widget_type.clone());
         }
-        
+
         if let Some(Value::String(control_type)) = data.get("controlType") {
             return Some(control_type.clone());
         }
-        
+
         None
     }
 
@@ -129,9 +133,7 @@ impl KymaWidgetExtractor {
                     "false" | "0" | "no" | "off" => Some(false),
                     _ => None,
                 },
-                Value::Number(n) => {
-                    n.as_i64().map(|num| num != 0)
-                },
+                Value::Number(n) => n.as_i64().map(|num| num != 0),
                 _ => None,
             }
         } else {
@@ -141,14 +143,15 @@ impl KymaWidgetExtractor {
 
     pub fn extract_widget_metadata(&self, event_id: i64) -> Option<WidgetMetadata> {
         let kyma_data = self.widget_descriptions.get(&event_id)?;
-        
+
         Some(WidgetMetadata {
             event_id,
             label: self.extract_label(kyma_data),
             display_type: self.extract_display_type(kyma_data),
             minimum: self.extract_float_field(kyma_data, "minimum"),
             maximum: self.extract_float_field(kyma_data, "maximum"),
-            default_value: self.extract_float_field(kyma_data, "defaultValue")
+            default_value: self
+                .extract_float_field(kyma_data, "defaultValue")
                 .or_else(|| self.extract_float_field(kyma_data, "default")),
             is_generated: self.extract_bool_field(kyma_data, "isGenerated"),
             units: self.extract_string_field(kyma_data, "units"),
@@ -157,7 +160,11 @@ impl KymaWidgetExtractor {
         })
     }
 
-    fn extract_string_field(&self, data: &HashMap<String, Value>, field_name: &str) -> Option<String> {
+    fn extract_string_field(
+        &self,
+        data: &HashMap<String, Value>,
+        field_name: &str,
+    ) -> Option<String> {
         if let Some(Value::String(s)) = data.get(field_name) {
             if !s.is_empty() {
                 Some(s.clone())
@@ -177,7 +184,7 @@ impl KymaWidgetExtractor {
         if !data.contains_key("concreteEventID") {
             return Err("Missing required field: concreteEventID".to_string());
         }
-        
+
         if let Some(Value::Number(event_id)) = data.get("concreteEventID") {
             if event_id.as_i64().is_none() {
                 return Err("concreteEventID must be a valid integer".to_string());
@@ -185,7 +192,7 @@ impl KymaWidgetExtractor {
         } else {
             return Err("concreteEventID must be a number".to_string());
         }
-        
+
         Ok(())
     }
 }
@@ -233,20 +240,15 @@ impl WidgetMetadata {
 
     pub fn normalize_value(&self, value: f64) -> Option<f64> {
         match (self.minimum, self.maximum) {
-            (Some(min), Some(max)) if max > min => {
-                Some((value - min) / (max - min))
-            },
+            (Some(min), Some(max)) if max > min => Some((value - min) / (max - min)),
             _ => None,
         }
     }
 
     pub fn denormalize_value(&self, normalized_value: f64) -> Option<f64> {
         match (self.minimum, self.maximum) {
-            (Some(min), Some(max)) if max > min => {
-                Some(min + normalized_value * (max - min))
-            },
+            (Some(min), Some(max)) if max > min => Some(min + normalized_value * (max - min)),
             _ => None,
         }
     }
 }
-

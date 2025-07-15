@@ -34,7 +34,7 @@ pub struct WidgetInsightResponse {
 }
 
 /// Standalone service for non-Tauri applications
-/// 
+///
 /// This provides the same functionality as the Tauri commands but without Tauri dependencies.
 /// Use this if you want to integrate the intelligence system into other types of applications.
 pub struct StandaloneIntelligenceService {
@@ -60,13 +60,15 @@ impl StandaloneIntelligenceService {
         event_id: i64,
         kyma_json: String,
     ) -> Result<(), String> {
-        let kyma_data: HashMap<String, serde_json::Value> = serde_json::from_str(&kyma_json)
-            .map_err(|e| format!("Failed to parse JSON: {e}"))?;
+        let kyma_data: HashMap<String, serde_json::Value> =
+            serde_json::from_str(&kyma_json).map_err(|e| format!("Failed to parse JSON: {e}"))?;
 
         crate::kyma_extractor::KymaWidgetExtractor::validate_kyma_data(&kyma_data)
             .map_err(|e| format!("Invalid Kyma data: {e}"))?;
 
-        let mut extractor = self.extractor.lock()
+        let mut extractor = self
+            .extractor
+            .lock()
             .map_err(|_| "Failed to lock extractor")?;
 
         extractor.cache_widget_description(kyma_data);
@@ -78,21 +80,29 @@ impl StandaloneIntelligenceService {
         &self,
         preset_data: PresetData,
     ) -> Result<IntelligenceStats, String> {
-        let mut system = self.system.lock()
+        let mut system = self
+            .system
+            .lock()
             .map_err(|_| "Failed to lock intelligence system")?;
 
-        let extractor = self.extractor.lock()
+        let extractor = self
+            .extractor
+            .lock()
             .map_err(|_| "Failed to lock extractor")?;
 
-        let event_values: HashMap<i64, f64> = preset_data.widget_values
+        let event_values: HashMap<i64, f64> = preset_data
+            .widget_values
             .into_iter()
             .filter_map(|(k, v)| k.parse::<i64>().ok().map(|id| (id, v)))
             .collect();
 
         let mut widget_values = Vec::new();
         for (event_id, current_value) in &event_values {
-            if let Some(training_widget) = extractor.create_training_widget(*event_id, *current_value) {
-                system.store_widget(training_widget.clone())
+            if let Some(training_widget) =
+                extractor.create_training_widget(*event_id, *current_value)
+            {
+                system
+                    .store_widget(training_widget.clone())
                     .map_err(|e| format!("Failed to store widget: {e:?}"))?;
 
                 widget_values.push(crate::WidgetValue {
@@ -116,7 +126,8 @@ impl StandaloneIntelligenceService {
                 .as_secs(),
         };
 
-        system.store_preset(preset)
+        system
+            .store_preset(preset)
             .map_err(|e| format!("Failed to store preset: {e:?}"))?;
 
         let stats = system.get_stats();
@@ -134,7 +145,9 @@ impl StandaloneIntelligenceService {
         partial_label: Option<String>,
         display_type: Option<String>,
     ) -> Result<Vec<SuggestionResponse>, String> {
-        let system = self.system.lock()
+        let system = self
+            .system
+            .lock()
             .map_err(|_| "Failed to lock intelligence system")?;
 
         let partial_widget = crate::Widget {
@@ -158,21 +171,29 @@ impl StandaloneIntelligenceService {
             })
             .collect();
 
-        log::debug!("Generated {} suggestions for event ID: {}", responses.len(), event_id);
+        log::debug!(
+            "Generated {} suggestions for event ID: {}",
+            responses.len(),
+            event_id
+        );
         Ok(responses)
     }
 
     pub async fn get_intelligence_stats(&self) -> Result<IntelligenceStats, String> {
-        let system = self.system.lock()
+        let system = self
+            .system
+            .lock()
             .map_err(|_| "Failed to lock intelligence system")?;
 
-        let extractor = self.extractor.lock()
+        let extractor = self
+            .extractor
+            .lock()
             .map_err(|_| "Failed to lock extractor")?;
 
         let stats = system.get_stats();
         Ok(IntelligenceStats {
             total_widgets: stats.get("total_widgets").copied().unwrap_or(0),
-            total_presets: stats.get("total_presets").copied().unwrap_or(0),  // <- Fixed: use "total_presets"
+            total_presets: stats.get("total_presets").copied().unwrap_or(0), // <- Fixed: use "total_presets"
             last_updated: chrono::Utc::now().to_rfc3339(),
             cache_size: extractor.cache_size(),
         })

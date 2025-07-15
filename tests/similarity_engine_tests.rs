@@ -1,6 +1,6 @@
-use widget_intelligence::*;
 use colored::*;
 use std::collections::HashMap;
+use widget_intelligence::*;
 
 fn create_kyma_widget(label: &str, min: f64, max: f64, current: f64) -> Widget {
     Widget {
@@ -209,9 +209,9 @@ fn test_value_ranges() {
 
     // Test different common ranges
     let range_tests = vec![
-        ("sw_00",   0.0, 1.0, 1.0),
+        ("sw_00", 0.0, 1.0, 1.0),
         ("sw_01", 0.0, 1.0, 0.0),
-        ("cutoff", 0.0, 8_000.0 , 650.0),
+        ("cutoff", 0.0, 8_000.0, 650.0),
         ("rate", -1.0, 1.0, 0.666),
         ("morph", 0.0, 1.0, 0.3),
         ("Gate", 0.0, 1.0, 1.0),
@@ -251,7 +251,11 @@ fn test_value_ranges() {
     println!(
         "\n{} {}",
         "→".green(),
-        format!("Suggestions for {}", test_widget.label.as_deref().unwrap_or("Unknown")).cyan()
+        format!(
+            "Suggestions for {}",
+            test_widget.label.as_deref().unwrap_or("Unknown")
+        )
+        .cyan()
     );
 
     for suggestion in &suggestions {

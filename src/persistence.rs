@@ -1,8 +1,8 @@
-use sled::{Db, Tree};
-use bincode::{Encode, Decode};
+use crate::similarity_engine::{Preset, Suggestion, Widget, WidgetRecord, WidgetSuggestionEngine};
+use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize}; // Keep temporarily for migration
+use sled::{Db, Tree};
 use std::collections::HashMap;
-use crate::similarity_engine::{WidgetRecord, Preset, WidgetSuggestionEngine, Widget, Suggestion};
 
 #[derive(Debug)]
 pub enum SledPersistenceError {
@@ -34,7 +34,9 @@ impl std::fmt::Display for SledPersistenceError {
         match self {
             SledPersistenceError::DatabaseError(e) => write!(f, "Database error: {e}"),
             SledPersistenceError::SerializationError(e) => write!(f, "Serialization error: {e}"),
-            SledPersistenceError::DeserializationError(e) => write!(f, "Deserialization error: {e}"),
+            SledPersistenceError::DeserializationError(e) => {
+                write!(f, "Deserialization error: {e}")
+            }
         }
     }
 }
@@ -55,12 +57,11 @@ impl SledPersistenceManager {
         let presets_tree = db.open_tree("presets_v1")?; // New tree for bincode format
         let metadata_tree = db.open_tree("metadata")?;
 
-
         Ok(Self {
             db,
             widgets_tree,
             presets_tree,
-            metadata_tree
+            metadata_tree,
         })
     }
 
@@ -113,7 +114,8 @@ impl SledPersistenceManager {
     }
 
     pub fn store_metadata(&self, key: &str, value: &str) -> Result<(), SledPersistenceError> {
-        self.metadata_tree.insert(key.as_bytes(), value.as_bytes())?;
+        self.metadata_tree
+            .insert(key.as_bytes(), value.as_bytes())?;
         Ok(())
     }
 
@@ -141,7 +143,6 @@ impl SledPersistenceManager {
     pub fn size_on_disk(&self) -> Result<u64, SledPersistenceError> {
         Ok(self.db.size_on_disk()?)
     }
-
 }
 
 #[derive(Debug)]
@@ -166,7 +167,10 @@ impl PersistentWidgetSuggestionEngine {
         match persistence.load_all_widgets() {
             Ok(widgets) => {
                 engine.records = widgets;
-                log::info!("Loaded {} widget records from database", engine.records.len());
+                log::info!(
+                    "Loaded {} widget records from database",
+                    engine.records.len()
+                );
             }
             Err(e) => {
                 log::warn!("Failed to load widgets from database: {e}");
@@ -189,7 +193,10 @@ impl PersistentWidgetSuggestionEngine {
             }
         }
 
-        Ok(Self { engine, persistence })
+        Ok(Self {
+            engine,
+            persistence,
+        })
     }
 
     pub fn store_widget(&mut self, widget: Widget) -> Result<(), SledPersistenceError> {
@@ -199,7 +206,8 @@ impl PersistentWidgetSuggestionEngine {
         if self.engine.records.len() > initial_count {
             if let Some(record) = self.engine.records.last() {
                 self.persistence.store_widget(record)?;
-                self.persistence.store_metadata("next_id", &self.engine.next_id.to_string())?;
+                self.persistence
+                    .store_metadata("next_id", &self.engine.next_id.to_string())?;
             }
         } else if let Some(record) = self.engine.records.iter().find(|r| r.frequency > 1) {
             self.persistence.store_widget(record)?;
@@ -214,7 +222,11 @@ impl PersistentWidgetSuggestionEngine {
         Ok(())
     }
 
-    pub fn get_suggestions(&self, partial_widget: &Widget, max_suggestions: usize) -> Vec<Suggestion> {
+    pub fn get_suggestions(
+        &self,
+        partial_widget: &Widget,
+        max_suggestions: usize,
+    ) -> Vec<Suggestion> {
         self.engine.get_suggestions(partial_widget, max_suggestions)
     }
 
@@ -261,7 +273,8 @@ impl PersistentWidgetSuggestionEngine {
         self.engine.display_types = data.display_types;
         self.engine.next_id = data.next_id;
 
-        self.persistence.store_metadata("next_id", &self.engine.next_id.to_string())?;
+        self.persistence
+            .store_metadata("next_id", &self.engine.next_id.to_string())?;
         self.flush()?;
 
         Ok(())
@@ -275,4 +288,3 @@ pub struct ExportData {
     pub display_types: HashMap<String, u64>,
     pub next_id: u64,
 }
-

@@ -95,22 +95,22 @@ impl From<FilteredWidgetDescription> for WidgetRecord {
         fn extract_string(map: &HashMap<String, serde_json::Value>, key: &str) -> Option<String> {
             map.get(key).and_then(|v| v.as_str().map(|s| s.to_string()))
         }
-        
+
         // Helper function to extract f64 values from JSON
         fn extract_f64(map: &HashMap<String, serde_json::Value>, key: &str) -> Option<f64> {
             map.get(key).and_then(|v| v.as_f64())
         }
-        
+
         // Helper function to extract bool values from JSON
         fn extract_bool(map: &HashMap<String, serde_json::Value>, key: &str) -> Option<bool> {
             map.get(key).and_then(|v| v.as_bool())
         }
-        
+
         // Helper function to extract u64 values from JSON
         fn extract_u64(map: &HashMap<String, serde_json::Value>, key: &str) -> Option<u64> {
             map.get(key).and_then(|v| v.as_u64())
         }
-        
+
         // Extract widget data from the filtered description
         let widget = Widget {
             label: extract_string(&filtered, "label"),
@@ -120,10 +120,11 @@ impl From<FilteredWidgetDescription> for WidgetRecord {
             is_generated: extract_bool(&filtered, "isGenerated"),
             display_type: extract_string(&filtered, "displayType"),
         };
-        
+
         // Create basic features from the widget data
         let label_tokens = if let Some(ref label) = widget.label {
-            label.to_lowercase()
+            label
+                .to_lowercase()
                 .split_whitespace()
                 .map(|s| s.chars().filter(|c| c.is_alphanumeric()).collect())
                 .filter(|s: &String| !s.is_empty())
@@ -131,11 +132,11 @@ impl From<FilteredWidgetDescription> for WidgetRecord {
         } else {
             Vec::new()
         };
-        
+
         let min_value = widget.minimum.unwrap_or(0.0);
         let max_value = widget.maximum.unwrap_or(100.0);
         let range = max_value - min_value;
-        
+
         // Calculate display type hash
         let display_type_hash = if let Some(ref display_type) = widget.display_type {
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -144,27 +145,31 @@ impl From<FilteredWidgetDescription> for WidgetRecord {
         } else {
             0
         };
-        
+
         let features = WidgetFeatures {
             label_tokens,
             min_value,
             max_value,
             range,
-            is_generated: if widget.is_generated.unwrap_or(false) { 1.0 } else { 0.0 },
+            is_generated: if widget.is_generated.unwrap_or(false) {
+                1.0
+            } else {
+                0.0
+            },
             display_type_hash,
             value_patterns: Vec::new(), // Will be populated by the engine
-            normalized_position: 0.5, // Default middle position
+            normalized_position: 0.5,   // Default middle position
         };
-        
+
         // Get current timestamp
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs();
-        
+
         // Extract ID from concreteEventID if available, otherwise use 0
         let id = extract_u64(&filtered, "concreteEventID").unwrap_or(0);
-        
+
         WidgetRecord {
             id,
             widget,
@@ -205,7 +210,6 @@ impl WidgetSuggestionEngine {
         }
     }
 
-
     pub fn store_widget(&mut self, widget: Widget) {
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -219,7 +223,6 @@ impl WidgetSuggestionEngine {
         let mut found_similar = false;
 
         for i in 0..self.records.len() {
-
             let similarity = self.calculate_similarity(&features, &self.records[i].features);
 
             if similarity > 0.85 {
@@ -273,7 +276,11 @@ impl WidgetSuggestionEngine {
         }
     }
 
-    pub fn get_suggestions(&self, partial_widget: &Widget, max_suggestions: usize) -> Vec<Suggestion> {
+    pub fn get_suggestions(
+        &self,
+        partial_widget: &Widget,
+        max_suggestions: usize,
+    ) -> Vec<Suggestion> {
         let features = self.extract_features_partial(partial_widget);
         let mut suggestions = Vec::new();
 
@@ -356,7 +363,11 @@ impl WidgetSuggestionEngine {
             0
         };
 
-        let is_generated = if widget.is_generated.unwrap_or(false) { 1.0 } else { 0.0 };
+        let is_generated = if widget.is_generated.unwrap_or(false) {
+            1.0
+        } else {
+            0.0
+        };
 
         let value_patterns = self.extract_value_patterns(&label_tokens, &widget.display_type);
 
@@ -401,7 +412,11 @@ impl WidgetSuggestionEngine {
             0
         };
 
-        let is_generated = if widget.is_generated.unwrap_or(false) { 1.0 } else { 0.0 };
+        let is_generated = if widget.is_generated.unwrap_or(false) {
+            1.0
+        } else {
+            0.0
+        };
 
         let value_patterns = self.extract_value_patterns(&label_tokens, &widget.display_type);
 
@@ -437,24 +452,34 @@ impl WidgetSuggestionEngine {
     }
 
     fn calculate_similarity(&self, features1: &WidgetFeatures, features2: &WidgetFeatures) -> f64 {
-        let label_similarity = self.calculate_label_similarity(&features1.label_tokens, &features2.label_tokens);
+        let label_similarity =
+            self.calculate_label_similarity(&features1.label_tokens, &features2.label_tokens);
         let range_similarity = self.calculate_range_similarity(features1, features2);
         let display_type_similarity = if features1.display_type_hash == features2.display_type_hash
-            && features1.display_type_hash != 0 { 1.0 } else { 0.0 };
+            && features1.display_type_hash != 0
+        {
+            1.0
+        } else {
+            0.0
+        };
         let generated_similarity = 1.0 - (features1.is_generated - features2.is_generated).abs();
 
         // Weighted combination
-        let similarity = (label_similarity * 0.4) +
-            (range_similarity * 0.3) +
-            (display_type_similarity * 0.2) +
-            (generated_similarity * 0.1);
+        let similarity = (label_similarity * 0.4)
+            + (range_similarity * 0.3)
+            + (display_type_similarity * 0.2)
+            + (generated_similarity * 0.1);
 
-        similarity.max(0.0).min(1.0)
+        similarity.clamp(0.0, 1.0)
     }
 
     fn calculate_label_similarity(&self, tokens1: &[String], tokens2: &[String]) -> f64 {
         if tokens1.is_empty() || tokens2.is_empty() {
-            return if tokens1.is_empty() && tokens2.is_empty() { 1.0 } else { 0.0 };
+            return if tokens1.is_empty() && tokens2.is_empty() {
+                1.0
+            } else {
+                0.0
+            };
         }
 
         let mut total_similarity = 0.0;
@@ -481,7 +506,11 @@ impl WidgetSuggestionEngine {
         }
     }
 
-    fn calculate_range_similarity(&self, features1: &WidgetFeatures, features2: &WidgetFeatures) -> f64 {
+    fn calculate_range_similarity(
+        &self,
+        features1: &WidgetFeatures,
+        features2: &WidgetFeatures,
+    ) -> f64 {
         let min_diff = (features1.min_value - features2.min_value).abs();
         let max_diff = (features1.max_value - features2.max_value).abs();
         let range_diff = (features1.range - features2.range).abs();
@@ -495,7 +524,11 @@ impl WidgetSuggestionEngine {
         1.0 - normalized_diff.min(1.0)
     }
 
-    fn extract_value_patterns(&self, label_tokens: &[String], _display_type: &Option<String>) -> Vec<f64> {
+    fn extract_value_patterns(
+        &self,
+        label_tokens: &[String],
+        _display_type: &Option<String>,
+    ) -> Vec<f64> {
         let mut patterns = Vec::new();
 
         // Common value patterns based on label tokens
@@ -518,7 +551,11 @@ impl WidgetSuggestionEngine {
         patterns
     }
 
-    fn suggest_values(&self, widget: &Widget, _features: &WidgetFeatures) -> (Option<f64>, f64, Vec<f64>) {
+    fn suggest_values(
+        &self,
+        widget: &Widget,
+        _features: &WidgetFeatures,
+    ) -> (Option<f64>, f64, Vec<f64>) {
         let min_val = widget.minimum.unwrap_or(0.0);
         let max_val = widget.maximum.unwrap_or(100.0);
         let range = max_val - min_val;
@@ -554,15 +591,19 @@ impl WidgetSuggestionEngine {
         suggested_values.dedup();
 
         let primary_suggestion = suggested_values.first().copied();
-        let confidence = if primary_suggestion.is_some() { 0.7 } else { 0.3 };
+        let confidence = if primary_suggestion.is_some() {
+            0.7
+        } else {
+            0.3
+        };
 
         (primary_suggestion, confidence, suggested_values)
     }
 
     fn recompute_value_statistics(&mut self) {
-
         for i in 0..self.records.len() {
-            let values: Vec<f64> = self.records
+            let values: Vec<f64> = self
+                .records
                 .iter()
                 .filter_map(|r| r.widget.current_value)
                 .collect();
@@ -582,7 +623,8 @@ impl WidgetSuggestionEngine {
         let variance = sorted_values
             .iter()
             .map(|&x| (x - mean).powi(2))
-            .sum::<f64>() / sorted_values.len() as f64;
+            .sum::<f64>()
+            / sorted_values.len() as f64;
         let std_dev = variance.sqrt();
 
         let percentiles = vec![
@@ -628,24 +670,48 @@ mod conversion_tests {
     #[test]
     fn test_filtered_widget_description_conversion() {
         let mut filtered = FilteredWidgetDescription::new();
-        filtered.insert("concreteEventID".to_string(), serde_json::Value::Number(serde_json::Number::from(42)));
-        filtered.insert("label".to_string(), serde_json::Value::String("Master Volume".to_string()));
-        filtered.insert("minimum".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(0.0).unwrap()));
-        filtered.insert("maximum".to_string(), serde_json::Value::Number(serde_json::Number::from_f64(127.0).unwrap()));
-        filtered.insert("displayType".to_string(), serde_json::Value::String("slider".to_string()));
+        filtered.insert(
+            "concreteEventID".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(42)),
+        );
+        filtered.insert(
+            "label".to_string(),
+            serde_json::Value::String("Master Volume".to_string()),
+        );
+        filtered.insert(
+            "minimum".to_string(),
+            serde_json::Value::Number(serde_json::Number::from_f64(0.0).unwrap()),
+        );
+        filtered.insert(
+            "maximum".to_string(),
+            serde_json::Value::Number(serde_json::Number::from_f64(127.0).unwrap()),
+        );
+        filtered.insert(
+            "displayType".to_string(),
+            serde_json::Value::String("slider".to_string()),
+        );
         filtered.insert("isGenerated".to_string(), serde_json::Value::Bool(false));
-        
+
         // Test the conversion using the From trait - this is the idiomatic way
         let widget_record: WidgetRecord = filtered.into();
-        
+
         assert_eq!(widget_record.id, 42);
-        assert_eq!(widget_record.widget.label, Some("Master Volume".to_string()));
+        assert_eq!(
+            widget_record.widget.label,
+            Some("Master Volume".to_string())
+        );
         assert_eq!(widget_record.widget.minimum, Some(0.0));
         assert_eq!(widget_record.widget.maximum, Some(127.0));
-        assert_eq!(widget_record.widget.display_type, Some("slider".to_string()));
+        assert_eq!(
+            widget_record.widget.display_type,
+            Some("slider".to_string())
+        );
         assert_eq!(widget_record.widget.is_generated, Some(false));
         assert_eq!(widget_record.frequency, 1);
-        assert_eq!(widget_record.features.label_tokens, vec!["master", "volume"]);
+        assert_eq!(
+            widget_record.features.label_tokens,
+            vec!["master", "volume"]
+        );
         assert_eq!(widget_record.features.min_value, 0.0);
         assert_eq!(widget_record.features.max_value, 127.0);
         assert_eq!(widget_record.features.range, 127.0);
@@ -657,12 +723,18 @@ mod conversion_tests {
     fn test_conversion_with_missing_fields() {
         // Test conversion when some fields are missing
         let mut filtered = FilteredWidgetDescription::new();
-        filtered.insert("concreteEventID".to_string(), serde_json::Value::Number(serde_json::Number::from(100)));
-        filtered.insert("label".to_string(), serde_json::Value::String("Test Control".to_string()));
+        filtered.insert(
+            "concreteEventID".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(100)),
+        );
+        filtered.insert(
+            "label".to_string(),
+            serde_json::Value::String("Test Control".to_string()),
+        );
         // Note: missing minimum, maximum, displayType, isGenerated
-        
+
         let widget_record: WidgetRecord = filtered.into();
-        
+
         assert_eq!(widget_record.id, 100);
         assert_eq!(widget_record.widget.label, Some("Test Control".to_string()));
         assert_eq!(widget_record.widget.minimum, None);
