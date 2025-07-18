@@ -9,7 +9,7 @@ use strsim::jaro_winkler;
 /// Type alias for filtered widget description from JSON
 pub type FilteredWidgetDescription = HashMap<String, serde_json::Value>;
 
-/// Represents a widget with its properties and snapshot of current value
+/// Represents a widget with its properties and normalized current value (0.0-1.0 or -1.0-1.0)
 #[derive(Debug, Clone, Encode, Decode, Serialize, Deserialize)]
 pub struct Widget {
     pub label: Option<String>,
@@ -41,6 +41,7 @@ pub struct Preset {
 }
 
 /// Features extracted from a widget for similarity calculation
+/// value_patterns stores normalized values (0.0-1.0 or -1.0-1.0) from observed widgets
 #[derive(Debug, Clone, Encode, Decode, Serialize, Deserialize)]
 pub struct WidgetFeatures {
     pub label_tokens: Vec<String>,
@@ -157,8 +158,12 @@ impl From<FilteredWidgetDescription> for WidgetRecord {
                 0.0
             },
             display_type_hash,
-            value_patterns: Vec::new(), // Will be populated by the engine
-            normalized_position: 0.5,   // Default middle position
+            value_patterns: if let Some(current) = widget.current_value {
+                vec![current]
+            } else {
+                Vec::new()
+            },
+            normalized_position: widget.current_value.unwrap_or(0.5)
         };
 
         // Get current timestamp
@@ -182,6 +187,7 @@ impl From<FilteredWidgetDescription> for WidgetRecord {
 }
 
 /// A suggestion for a widget value with confidence and reasoning
+/// All suggested values are normalized (0.0-1.0 or -1.0-1.0)
 #[derive(Debug, Clone, Encode, Decode, Serialize, Deserialize)]
 pub struct Suggestion {
     pub widget: Widget,
@@ -236,8 +242,10 @@ impl WidgetSuggestionEngine {
                 if widget.display_type.is_some() && self.records[i].widget.display_type.is_none() {
                     self.records[i].widget.display_type = widget.display_type.clone();
                 }
-                if widget.current_value.is_some() {
-                    self.records[i].widget.current_value = widget.current_value;
+                if let Some(current) = widget.current_value {
+                    self.records[i].widget.current_value = Some(current);
+                    // Add normalized value to the feature's value_patterns
+                    self.records[i].features.value_patterns.push(current);
                 }
 
                 found_similar = true;
@@ -369,17 +377,15 @@ impl WidgetSuggestionEngine {
             0.0
         };
 
-        let value_patterns = self.extract_value_patterns(&label_tokens, &widget.display_type);
+        let mut value_patterns = self.extract_value_patterns(&label_tokens, &widget.display_type);
+        
+        // Add the normalized current_value to value_patterns if available
+        if let Some(current) = widget.current_value {
+            value_patterns.push(current);
+        }
 
-        let normalized_position = if let Some(current) = widget.current_value {
-            if range > 0.0 {
-                (current - min_value) / range
-            } else {
-                0.5
-            }
-        } else {
-            0.5
-        };
+        // current_value is already normalized, use it directly
+        let normalized_position = widget.current_value.unwrap_or(0.5);
 
         WidgetFeatures {
             label_tokens,
@@ -418,17 +424,15 @@ impl WidgetSuggestionEngine {
             0.0
         };
 
-        let value_patterns = self.extract_value_patterns(&label_tokens, &widget.display_type);
+        let mut value_patterns = self.extract_value_patterns(&label_tokens, &widget.display_type);
+        
+        // Add the normalized current_value to value_patterns if available
+        if let Some(current) = widget.current_value {
+            value_patterns.push(current);
+        }
 
-        let normalized_position = if let Some(current) = widget.current_value {
-            if range > 0.0 {
-                (current - min_value) / range
-            } else {
-                0.5
-            }
-        } else {
-            0.5
-        };
+        // current_value is already normalized, use it directly
+        let normalized_position = widget.current_value.unwrap_or(0.5);
 
         WidgetFeatures {
             label_tokens,
@@ -553,49 +557,31 @@ impl WidgetSuggestionEngine {
 
     fn suggest_values(
         &self,
-        widget: &Widget,
-        _features: &WidgetFeatures,
+        _widget: &Widget,
+        features: &WidgetFeatures,
     ) -> (Option<f64>, f64, Vec<f64>) {
-        let min_val = widget.minimum.unwrap_or(0.0);
-        let max_val = widget.maximum.unwrap_or(100.0);
-        let range = max_val - min_val;
-
-        if range <= 0.0 {
-            return (Some(min_val), 0.5, vec![min_val]);
-        }
-
-        // Extract common patterns from similar widgets
-        let mut common_positions = Vec::new();
-
-        // Add some reasonable defaults based on widget type
-        if let Some(label) = &widget.label {
-            let label_lower = label.to_lowercase();
-            if label_lower.contains("volume") || label_lower.contains("level") {
-                common_positions.extend_from_slice(&[0.7, 0.8, 0.9]);
-            } else if label_lower.contains("pan") {
-                common_positions.extend_from_slice(&[0.5, 0.3, 0.7]);
-            } else {
-                common_positions.extend_from_slice(&[0.5, 0.3, 0.7]);
-            }
+        // Return normalized values directly - consumer will handle denormalization
+        let mut suggested_values: Vec<f64> = if !features.value_patterns.is_empty() {
+            // Use the accumulated normalized values directly
+            features.value_patterns.clone()
         } else {
-            common_positions.extend_from_slice(&[0.5, 0.3, 0.7]);
-        }
+            // Fallback to reasonable normalized defaults if no patterns available
+            vec![0.5, 0.3, 0.7]  // Middle, lower third, upper third
+        };
 
-        // Convert positions to actual values
-        let mut suggested_values: Vec<f64> = common_positions
-            .iter()
-            .map(|&pos| min_val + (pos * range))
-            .collect();
-
+        // Sort and remove duplicates
         suggested_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
         suggested_values.dedup();
 
-        let primary_suggestion = suggested_values.first().copied();
-        let confidence = if primary_suggestion.is_some() {
-            0.7
-        } else {
-            0.3
+        // Calculate confidence based on number of observed patterns
+        let confidence = match features.value_patterns.len() {
+            0 => 0.3,
+            1..=2 => 0.5,
+            3..=5 => 0.7,
+            _ => 0.9,
         };
+
+        let primary_suggestion = suggested_values.first().copied();
 
         (primary_suggestion, confidence, suggested_values)
     }
@@ -687,6 +673,10 @@ mod conversion_tests {
             serde_json::Value::Number(serde_json::Number::from_f64(127.0).unwrap()),
         );
         filtered.insert(
+            "current_value".to_string(),
+            serde_json::Value::Number(serde_json::Number::from_f64(0.75).unwrap()),
+        );
+        filtered.insert(
             "displayType".to_string(),
             serde_json::Value::String("slider".to_string()),
         );
@@ -717,6 +707,9 @@ mod conversion_tests {
         assert_eq!(widget_record.features.range, 127.0);
         assert_eq!(widget_record.features.is_generated, 0.0);
         assert!(widget_record.features.display_type_hash != 0);
+        assert_eq!(widget_record.widget.current_value, Some(0.75));
+        // Check that current_value is added to value_patterns
+        assert!(widget_record.features.value_patterns.contains(&0.75));
     }
 
     #[test]
@@ -745,5 +738,44 @@ mod conversion_tests {
         assert_eq!(widget_record.features.max_value, 100.0); // Default value
         assert_eq!(widget_record.features.range, 100.0);
         assert_eq!(widget_record.features.display_type_hash, 0);
+    }
+
+    #[test]
+    fn test_normalized_value_accumulation() {
+        let mut engine = WidgetSuggestionEngine::new();
+
+        // Create a widget with normalized value
+        let widget1 = Widget {
+            label: Some("Volume".to_string()),
+            minimum: Some(0.0),
+            maximum: Some(100.0),
+            current_value: Some(0.7), // Normalized value
+            is_generated: Some(false),
+            display_type: Some("slider".to_string()),
+        };
+
+        // Store first widget
+        engine.store_widget(widget1.clone());
+
+        // Store similar widget with different normalized value
+        let mut widget2 = widget1.clone();
+        widget2.current_value = Some(0.8);
+        engine.store_widget(widget2);
+
+        // Store another similar widget
+        let mut widget3 = widget1.clone();
+        widget3.current_value = Some(0.75);
+        engine.store_widget(widget3);
+
+        // Check that values are accumulated in value_patterns
+        assert_eq!(engine.records.len(), 1); // Should be merged as similar
+        assert_eq!(engine.records[0].frequency, 3);
+        
+        let patterns = &engine.records[0].features.value_patterns;
+        assert!(patterns.contains(&0.7));
+        assert!(patterns.contains(&0.8));
+        assert!(patterns.contains(&0.75));
+        // Also contains default pattern from extract_value_patterns
+        assert!(patterns.len() >= 3);
     }
 }

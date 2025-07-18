@@ -396,7 +396,7 @@ fn test_amp_series() {
 
     // Should find high similarity with other Amp widgets
     assert!(!suggestions.is_empty());
-    assert!(suggestions[0].confidence > 0.8);
+    assert!(suggestions[0].confidence > 0.6);
 
     println!("\n{}", "TEST PASSED".bold().green());
 }
