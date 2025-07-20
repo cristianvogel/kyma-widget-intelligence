@@ -135,7 +135,7 @@ impl From<FilteredWidgetDescription> for WidgetRecord {
         };
 
         let min_value = widget.minimum.unwrap_or(0.0);
-        let max_value = widget.maximum.unwrap_or(100.0);
+        let max_value = widget.maximum.unwrap_or(1.0);
         let range = max_value - min_value;
 
         // Calculate display type hash
@@ -322,6 +322,92 @@ impl WidgetSuggestionEngine {
         suggestions
     }
 
+    pub fn get_suggestions_by_event_id(
+        &self,
+        event_id: u64,
+        max_suggestions: usize,
+    ) -> Vec<Suggestion> {
+        // Find records with matching event ID
+        let matching_records: Vec<&WidgetRecord> = self.records.iter()
+            .filter(|r| r.id == event_id)
+            .collect();
+
+        if matching_records.is_empty() {
+            // If no exact match, fall back to regular suggestions
+            if let Some(first_record) = self.records.first() {
+                return self.get_suggestions(&first_record.widget, max_suggestions);
+            } else {
+                return Vec::new();
+            }
+        }
+
+        let mut suggestions = Vec::new();
+
+        // First, process exact matches
+        for &record in &matching_records {
+            // For exact event ID matches, use the observed values directly
+            let (suggested_value, value_confidence, alternative_values) =
+                self.suggest_values(&record.widget, &record.features);
+
+            let reason = format!(
+                "Exact match for event ID {} ({})",
+                event_id,
+                record.widget.label.as_deref().unwrap_or("unnamed widget")
+            );
+
+            suggestions.push(Suggestion {
+                widget: record.widget.clone(),
+                confidence: 1.0,  // Highest confidence for exact matches
+                reason,
+                suggested_value,
+                value_confidence,
+                alternative_values,
+            });
+        }
+
+        // If we don't have enough suggestions from exact matches, add similar widgets
+        if suggestions.len() < max_suggestions {
+            // Use the first matching record as a template for finding similar widgets
+            if let Some(&template) = matching_records.first() {
+                let features = &template.features;
+
+                for record in &self.records {
+                    // Skip records we've already included
+                    if record.id == event_id {
+                        continue;
+                    }
+
+                    let similarity = self.calculate_similarity(features, &record.features);
+
+                    if similarity > 0.5 {  // Higher threshold for event ID-based suggestions
+                        let (suggested_value, value_confidence, alternative_values) =
+                            self.suggest_values(&record.widget, &record.features);
+
+                        let reason = format!(
+                            "Similar to event ID {} ({}) with similarity {:.2}",
+                            event_id,
+                            template.widget.label.as_deref().unwrap_or("unnamed widget"),
+                            similarity
+                        );
+
+                        suggestions.push(Suggestion {
+                            widget: record.widget.clone(),
+                            confidence: similarity,
+                            reason,
+                            suggested_value,
+                            value_confidence,
+                            alternative_values,
+                        });
+                    }
+                }
+            }
+        }
+
+        suggestions.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+        suggestions.truncate(max_suggestions);
+        suggestions
+    }
+
     pub fn get_preset_insights(&self, widget: &Widget) -> Option<String> {
         for preset in &self.presets {
             for widget_value in &preset.widget_values {
@@ -378,7 +464,7 @@ impl WidgetSuggestionEngine {
         };
 
         let mut value_patterns = self.extract_value_patterns(&label_tokens, &widget.display_type);
-        
+
         // Add the normalized current_value to value_patterns if available
         if let Some(current) = widget.current_value {
             value_patterns.push(current);
@@ -425,7 +511,7 @@ impl WidgetSuggestionEngine {
         };
 
         let mut value_patterns = self.extract_value_patterns(&label_tokens, &widget.display_type);
-        
+
         // Add the normalized current_value to value_patterns if available
         if let Some(current) = widget.current_value {
             value_patterns.push(current);
@@ -562,7 +648,7 @@ impl WidgetSuggestionEngine {
     ) -> (Option<f64>, f64, Vec<f64>) {
         // Return normalized values directly - consumer will handle denormalization
         let mut suggested_values: Vec<f64> = if !features.value_patterns.is_empty() {
-            // Use the accumulated normalized values directly
+            // Use the accumulated normalized values directly as the main training metric
             features.value_patterns.clone()
         } else {
             // Fallback to reasonable normalized defaults if no patterns available
@@ -581,7 +667,34 @@ impl WidgetSuggestionEngine {
             _ => 0.9,
         };
 
-        let primary_suggestion = suggested_values.first().copied();
+        // Get the primary suggestion - prioritize observed values
+        let primary_suggestion = if !features.value_patterns.is_empty() {
+            // Find the most common value in value_patterns
+            // Since f64 doesn't implement Eq and Hash, we need to use a different approach
+            let mut most_common_value = features.value_patterns[0];
+            let mut max_count = 1;
+
+            for i in 0..features.value_patterns.len() {
+                let current = features.value_patterns[i];
+                let mut count = 1;
+
+                for j in (i+1)..features.value_patterns.len() {
+                    // Use approximate equality for floating point comparison
+                    if (features.value_patterns[j] - current).abs() < 0.0001 {
+                        count += 1;
+                    }
+                }
+
+                if count > max_count {
+                    max_count = count;
+                    most_common_value = current;
+                }
+            }
+
+            Some(most_common_value)
+        } else {
+            suggested_values.first().copied()
+        };
 
         (primary_suggestion, confidence, suggested_values)
     }
@@ -735,8 +848,8 @@ mod conversion_tests {
         assert_eq!(widget_record.widget.display_type, None);
         assert_eq!(widget_record.widget.is_generated, None);
         assert_eq!(widget_record.features.min_value, 0.0); // Default value
-        assert_eq!(widget_record.features.max_value, 100.0); // Default value
-        assert_eq!(widget_record.features.range, 100.0);
+        assert_eq!(widget_record.features.max_value, 1.0); // Default value
+        assert_eq!(widget_record.features.range, 1.0);
         assert_eq!(widget_record.features.display_type_hash, 0);
     }
 
@@ -770,7 +883,7 @@ mod conversion_tests {
         // Check that values are accumulated in value_patterns
         assert_eq!(engine.records.len(), 1); // Should be merged as similar
         assert_eq!(engine.records[0].frequency, 3);
-        
+
         let patterns = &engine.records[0].features.value_patterns;
         assert!(patterns.contains(&0.7));
         assert!(patterns.contains(&0.8));

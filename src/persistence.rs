@@ -230,6 +230,14 @@ impl PersistentWidgetSuggestionEngine {
         self.engine.get_suggestions(partial_widget, max_suggestions)
     }
 
+    pub fn get_suggestions_by_event_id(
+        &self,
+        event_id: u64,
+        max_suggestions: usize,
+    ) -> Vec<Suggestion> {
+        self.engine.get_suggestions_by_event_id(event_id, max_suggestions)
+    }
+
     pub fn get_preset_insights(&self, widget: &Widget) -> Option<String> {
         self.engine.get_preset_insights(widget)
     }
