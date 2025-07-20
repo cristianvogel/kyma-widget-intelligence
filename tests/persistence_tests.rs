@@ -14,6 +14,8 @@ fn create_kyma_widget(label: &str, min: f64, max: f64, current: f64) -> Widget {
         current_value: Some(current),
         is_generated: Some(false),
         display_type: Some("slider".to_string()),
+        event_id: None,
+        values: vec![current],
     }
 }
 

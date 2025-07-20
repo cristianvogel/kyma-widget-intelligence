@@ -71,6 +71,8 @@ impl Default for Widget {
             current_value: None,
             is_generated: None,
             display_type: None,
+            event_id: None,
+            values: Vec::new(),
         }
     }
 }
@@ -113,6 +115,8 @@ pub fn create_test_widget(label: &str, min: f64, max: f64, current: f64) -> Widg
         current_value: Some(current),
         is_generated: Some(false),
         display_type: Some("slider".to_string()),
+        event_id: None,
+        values: vec![current],
     }
 }
 

@@ -18,6 +18,41 @@ pub struct Widget {
     pub is_generated: Option<bool>,
     pub display_type: Option<String>,
     pub current_value: Option<f64>,
+    pub event_id: Option<u64>,
+    pub values: Vec<f64>,
+}
+
+impl Widget {
+    /// Creates a simplified widget with only label, event_id, and values
+    pub fn simplified(label: Option<String>, event_id: Option<u64>, values: Vec<f64>) -> Self {
+        let current_value = if !values.is_empty() {
+            Some(values[0])
+        } else {
+            None
+        };
+
+        Self {
+            label,
+            event_id,
+            values: values.clone(),
+            minimum: None,
+            maximum: None,
+            is_generated: None,
+            display_type: None,
+            current_value,
+        }
+    }
+
+    /// Gets the values vector, including the current_value if available
+    pub fn get_values(&self) -> Vec<f64> {
+        let mut result = self.values.clone();
+        if let Some(current) = self.current_value {
+            if !result.contains(&current) {
+                result.push(current);
+            }
+        }
+        result
+    }
 }
 
 /// Represents a widget value with metadata
@@ -113,13 +148,18 @@ impl From<FilteredWidgetDescription> for WidgetRecord {
         }
 
         // Extract widget data from the filtered description
+        let current_value = extract_f64(&filtered, "current_value");
+        let event_id = extract_u64(&filtered, "concreteEventID");
+
         let widget = Widget {
             label: extract_string(&filtered, "label"),
             minimum: extract_f64(&filtered, "minimum"),
             maximum: extract_f64(&filtered, "maximum"),
-            current_value: extract_f64(&filtered, "current_value"),
+            current_value,
             is_generated: extract_bool(&filtered, "isGenerated"),
             display_type: extract_string(&filtered, "displayType"),
+            event_id,
+            values: if let Some(val) = current_value { vec![val] } else { Vec::new() },
         };
 
         // Create basic features from the widget data
@@ -225,7 +265,63 @@ impl WidgetSuggestionEngine {
         // Extract features
         let features = self.extract_features(&widget);
 
-        // Check if a similar widget already exists
+        // First, check if we have an exact match by event_id
+        if let Some(event_id) = widget.event_id {
+            for i in 0..self.records.len() {
+                if self.records[i].widget.event_id == Some(event_id) {
+                    // Update existing record with the same event_id
+                    self.records[i].frequency += 1;
+                    self.records[i].last_seen = current_time;
+
+                    // Update label if new one is provided
+                    if widget.label.is_some() && self.records[i].widget.label.is_none() {
+                        self.records[i].widget.label = widget.label.clone();
+                    }
+
+                    // Add new values to the existing values vector
+                    for &value in &widget.values {
+                        if !self.records[i].widget.values.contains(&value) {
+                            self.records[i].widget.values.push(value);
+                            // Also add to feature's value_patterns for backward compatibility
+                            self.records[i].features.value_patterns.push(value);
+                        }
+                    }
+
+                    return;
+                }
+            }
+        }
+
+        // Next, check if we have an exact match by label
+        if let Some(label) = &widget.label {
+            for i in 0..self.records.len() {
+                if let Some(record_label) = &self.records[i].widget.label {
+                    if record_label == label {
+                        // Update existing record with the same label
+                        self.records[i].frequency += 1;
+                        self.records[i].last_seen = current_time;
+
+                        // Update event_id if new one is provided
+                        if widget.event_id.is_some() && self.records[i].widget.event_id.is_none() {
+                            self.records[i].widget.event_id = widget.event_id;
+                        }
+
+                        // Add new values to the existing values vector
+                        for &value in &widget.values {
+                            if !self.records[i].widget.values.contains(&value) {
+                                self.records[i].widget.values.push(value);
+                                // Also add to feature's value_patterns for backward compatibility
+                                self.records[i].features.value_patterns.push(value);
+                            }
+                        }
+
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Finally, check for similar widgets
         let mut found_similar = false;
 
         for i in 0..self.records.len() {
@@ -239,13 +335,18 @@ impl WidgetSuggestionEngine {
                 if widget.label.is_some() && self.records[i].widget.label.is_none() {
                     self.records[i].widget.label = widget.label.clone();
                 }
-                if widget.display_type.is_some() && self.records[i].widget.display_type.is_none() {
-                    self.records[i].widget.display_type = widget.display_type.clone();
+
+                if widget.event_id.is_some() && self.records[i].widget.event_id.is_none() {
+                    self.records[i].widget.event_id = widget.event_id;
                 }
-                if let Some(current) = widget.current_value {
-                    self.records[i].widget.current_value = Some(current);
-                    // Add normalized value to the feature's value_patterns
-                    self.records[i].features.value_patterns.push(current);
+
+                // Add new values to the existing values vector
+                for &value in &widget.values {
+                    if !self.records[i].widget.values.contains(&value) {
+                        self.records[i].widget.values.push(value);
+                        // Also add to feature's value_patterns for backward compatibility
+                        self.records[i].features.value_patterns.push(value);
+                    }
                 }
 
                 found_similar = true;
@@ -264,11 +365,6 @@ impl WidgetSuggestionEngine {
             };
             self.records.push(record);
             self.next_id += 1;
-        }
-
-        // Recompute statistics periodically
-        if self.records.len() % 10 == 0 {
-            self.recompute_value_statistics();
         }
     }
 
@@ -289,31 +385,71 @@ impl WidgetSuggestionEngine {
         partial_widget: &Widget,
         max_suggestions: usize,
     ) -> Vec<Suggestion> {
+        // If the partial widget has an event_id, use that for suggestions
+        if let Some(event_id) = partial_widget.event_id {
+            return self.get_suggestions_by_event_id(event_id, max_suggestions);
+        }
+
         let features = self.extract_features_partial(partial_widget);
         let mut suggestions = Vec::new();
 
-        for record in &self.records {
-            let similarity = self.calculate_similarity(&features, &record.features);
+        // First, try to find widgets with matching label
+        if let Some(label) = &partial_widget.label {
+            for record in &self.records {
+                if let Some(record_label) = &record.widget.label {
+                    if record_label == label {
+                        let (suggested_value, value_confidence, alternative_values) =
+                            self.suggest_values_from_vector(&record.widget);
 
-            if similarity > 0.3 {
-                let (suggested_value, value_confidence, alternative_values) =
-                    self.suggest_values(partial_widget, &record.features);
+                        let reason = format!(
+                            "Exact label match for '{}' (frequency: {})",
+                            label,
+                            record.frequency
+                        );
 
-                let reason = format!(
-                    "Similar to {} (similarity: {:.2}, frequency: {})",
-                    record.widget.label.as_deref().unwrap_or("unnamed widget"),
-                    similarity,
-                    record.frequency
-                );
+                        suggestions.push(Suggestion {
+                            widget: record.widget.clone(),
+                            confidence: 1.0,  // Highest confidence for exact matches
+                            reason,
+                            suggested_value,
+                            value_confidence,
+                            alternative_values,
+                        });
+                    }
+                }
+            }
+        }
 
-                suggestions.push(Suggestion {
-                    widget: record.widget.clone(),
-                    confidence: similarity,
-                    reason,
-                    suggested_value,
-                    value_confidence,
-                    alternative_values,
-                });
+        // If we don't have enough suggestions from exact matches, add similar widgets
+        if suggestions.len() < max_suggestions {
+            for record in &self.records {
+                // Skip records we've already included
+                if suggestions.iter().any(|s| s.widget.label == record.widget.label) {
+                    continue;
+                }
+
+                let similarity = self.calculate_similarity(&features, &record.features);
+
+                if similarity > 0.3 {
+                    let (suggested_value, value_confidence, alternative_values) =
+                        self.suggest_values_from_vector(&record.widget);
+
+                    let reason = format!(
+                        "Similar to {} (similarity: {:.2}, frequency: {})",
+                        record.widget.label.as_deref().unwrap_or("unnamed widget"),
+                        similarity,
+                        record.frequency
+                    );
+
+                    suggestions.push(Suggestion {
+                        widget: record.widget.clone(),
+                        confidence: similarity,
+                        reason,
+                        suggested_value,
+                        value_confidence,
+                        alternative_values,
+                    });
+                }
             }
         }
 
@@ -329,7 +465,7 @@ impl WidgetSuggestionEngine {
     ) -> Vec<Suggestion> {
         // Find records with matching event ID
         let matching_records: Vec<&WidgetRecord> = self.records.iter()
-            .filter(|r| r.id == event_id)
+            .filter(|r| r.widget.event_id == Some(event_id) || r.id == event_id)
             .collect();
 
         if matching_records.is_empty() {
@@ -347,7 +483,7 @@ impl WidgetSuggestionEngine {
         for &record in &matching_records {
             // For exact event ID matches, use the observed values directly
             let (suggested_value, value_confidence, alternative_values) =
-                self.suggest_values(&record.widget, &record.features);
+                self.suggest_values_from_vector(&record.widget);
 
             let reason = format!(
                 "Exact match for event ID {} ({})",
@@ -373,7 +509,7 @@ impl WidgetSuggestionEngine {
 
                 for record in &self.records {
                     // Skip records we've already included
-                    if record.id == event_id {
+                    if record.widget.event_id == Some(event_id) || record.id == event_id {
                         continue;
                     }
 
@@ -381,7 +517,7 @@ impl WidgetSuggestionEngine {
 
                     if similarity > 0.5 {  // Higher threshold for event ID-based suggestions
                         let (suggested_value, value_confidence, alternative_values) =
-                            self.suggest_values(&record.widget, &record.features);
+                            self.suggest_values_from_vector(&record.widget);
 
                         let reason = format!(
                             "Similar to event ID {} ({}) with similarity {:.2}",
@@ -406,6 +542,49 @@ impl WidgetSuggestionEngine {
         suggestions.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
         suggestions.truncate(max_suggestions);
         suggestions
+    }
+
+    /// Suggest values based on the widget's values vector
+    fn suggest_values_from_vector(&self, widget: &Widget) -> (Option<f64>, f64, Vec<f64>) {
+        let values = widget.get_values();
+
+        if values.is_empty() {
+            return (None, 0.3, vec![0.5, 0.3, 0.7]);  // Default fallback
+        }
+
+        // Calculate confidence based on number of observed values
+        let confidence = match values.len() {
+            0 => 0.3,
+            1..=2 => 0.5,
+            3..=5 => 0.7,
+            _ => 0.9,
+        };
+
+        // Find the most common value
+        let mut value_counts: HashMap<String, u32> = HashMap::new();
+        for &val in &values {
+            let key = format!("{:.4}", val);
+            *value_counts.entry(key).or_insert(0) += 1;
+        }
+
+        let mut most_common_value = values[0];
+        let mut max_count = 1;
+
+        for (val_str, count) in value_counts.iter() {
+            if *count > max_count {
+                if let Ok(val) = val_str.parse::<f64>() {
+                    most_common_value = val;
+                    max_count = *count;
+                }
+            }
+        }
+
+        // Return the most common value and all unique values
+        let mut unique_values = values.clone();
+        unique_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        unique_values.dedup();
+
+        (Some(most_common_value), confidence, unique_values)
     }
 
     pub fn get_preset_insights(&self, widget: &Widget) -> Option<String> {
@@ -865,6 +1044,8 @@ mod conversion_tests {
             current_value: Some(0.7), // Normalized value
             is_generated: Some(false),
             display_type: Some("slider".to_string()),
+            event_id: None,
+            values: vec![0.7],
         };
 
         // Store first widget
