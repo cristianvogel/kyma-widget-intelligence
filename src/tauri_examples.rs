@@ -157,6 +157,8 @@ impl StandaloneIntelligenceService {
             current_value: None,
             is_generated: None,
             display_type,
+            event_id: Some(event_id as u64),
+            values: Vec::new(),
         };
 
         let suggestions = system.get_suggestions(&partial_widget, 5);

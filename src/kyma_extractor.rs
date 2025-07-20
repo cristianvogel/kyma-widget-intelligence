@@ -32,6 +32,8 @@ impl KymaWidgetExtractor {
             current_value: Some(current_value),
             is_generated: self.extract_bool_field(kyma_data, "isGenerated"),
             display_type: self.extract_display_type(kyma_data),
+            event_id: Some(event_id as u64),
+            values: vec![current_value],
         };
 
         log::trace!(
@@ -226,6 +228,8 @@ impl WidgetMetadata {
             current_value: Some(current_value),
             is_generated: self.is_generated,
             display_type: self.display_type.clone(),
+            event_id: Some(self.event_id as u64),
+            values: vec![current_value],
         }
     }
 
